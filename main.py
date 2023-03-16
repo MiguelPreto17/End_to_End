@@ -138,16 +138,11 @@ if __name__ == '__main__':
 		bess_asset = {
 			'actualENom': GeneralSettings.bess_e_nom,
 			'eNom': GeneralSettings.bess_e_nom,
-			'invMaxIDC': GeneralSettings.bess_inv_max_idc,
-			'invSNom': GeneralSettings.bess_inv_s_nom,
-			'invVNom': GeneralSettings.bess_inv_v_nom,
-			'maxCCh': GeneralSettings.bess_max_c_ch,
-			'maxCDch': GeneralSettings.bess_max_c_disch,
 			'maxSoc': GeneralSettings.bess_max_soc,
-			'minPCh': GeneralSettings.bess_min_p_ch,
-			'minPDch': GeneralSettings.bess_min_p_disch,
 			'minSoc': GeneralSettings.bess_min_soc,
 			'vNom': GeneralSettings.bess_v_nom,
+			'bess_max_power_Ch': GeneralSettings.bess_max_power_Ch,
+			'bess_max_power_Disch': GeneralSettings.bess_max_power_Disch,
 		}
 
 		milp_params = {

@@ -22,20 +22,15 @@ class GeneralSettings:
 	step = 60  # optimization step in minutes
 
 	# settings
-	scale_pv = 20.0  # kW
-	scale_load = 15.0  # kW
+	scale_pv = 0.0  # kW
+	scale_load = 1.0  # kW
 	pcc_limit_value = 100.0  # kW
 	init_dt = '01/01/2018  00:00:00'  # format: 'dd/mm/yyyy  HH:MM:SS'
 
 	bess_initial_soc = 50.0  # SoC % at the beginning of the optimization horizon [%]
 	bess_e_nom = 20.0  # nominal energy capacity [kWh]
-	bess_inv_max_idc = 1.0  # inverter's maximum DC current [kA]
-	bess_inv_s_nom = 10.0  # inverter's nominal power [kVA]
-	bess_inv_v_nom = 400.0  # inverter's nominal voltage [V]
-	bess_max_c_ch = 1  # maximum C-rate for charging [0, 1]
-	bess_max_c_disch = 1  # maximum C-rate for charging [0, 1]
 	bess_max_soc = 100.0  # maximum SoC [%]
-	bess_min_p_ch = 0.0  # minimum power rate admissible for charging [%]
-	bess_min_p_disch = 0.0  # minimum power rate admissible for discharging [%]
 	bess_min_soc = 0.0  # minimum SoC [%]
 	bess_v_nom = 720.0  # nominal voltage [V]
+	bess_max_power_Ch = 10.0  # BESS Max charging power [kW]
+	bess_max_power_Disch = 10.0  # BESS Max Discharging power [kW]

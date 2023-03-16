@@ -36,31 +36,31 @@
 # 	return best_fit[0]
 #
 #
-def c_rate_limits(max_c_rate, nom_capacity, inv_max_idc):
-	"""
-	Checks if BES's maximum C-rate current is higher than the inverter's nominal current and,
-	 if it is, substitute it by the inverter's nominal current corresponding C-rate
-	:param max_c_rate: input maximum C-rate
-	:type max_c_rate: float
-	:param nom_capacity: nominal capacity in Ah
-	:type nom_capacity: float
-	:param inv_max_idc: inverter's maximum Idc current
-	:type inv_max_idc: float
-	:return: effective maximum C-rate
-	:rtype: float
-	"""
-
-	# At first, the maximum c-rate is assumed as inputted
-	max_c_rate_edited = max_c_rate
-
-	# Through the BESS capacity, the current for maximum C-rate is calculated
-	bess_current = nom_capacity * max_c_rate_edited
-
-	# Substitute the C-rate by the C-rate corresponding to the inverter nominal current if needed
-	if bess_current > inv_max_idc:
-		max_c_rate_edited = inv_max_idc / bess_current
-
-	return max_c_rate_edited
+# def c_rate_limits(max_c_rate, nom_capacity, inv_max_idc):
+# 	"""
+# 	Checks if BES's maximum C-rate current is higher than the inverter's nominal current and,
+# 	 if it is, substitute it by the inverter's nominal current corresponding C-rate
+# 	:param max_c_rate: input maximum C-rate
+# 	:type max_c_rate: float
+# 	:param nom_capacity: nominal capacity in Ah
+# 	:type nom_capacity: float
+# 	:param inv_max_idc: inverter's maximum Idc current
+# 	:type inv_max_idc: float
+# 	:return: effective maximum C-rate
+# 	:rtype: float
+# 	"""
+#
+# 	# At first, the maximum c-rate is assumed as inputted
+# 	max_c_rate_edited = max_c_rate
+#
+# 	# Through the BESS capacity, the current for maximum C-rate is calculated
+# 	bess_current = nom_capacity * max_c_rate_edited
+#
+# 	# Substitute the C-rate by the C-rate corresponding to the inverter nominal current if needed
+# 	if bess_current > inv_max_idc:
+# 		max_c_rate_edited = inv_max_idc / bess_current
+#
+# 	return max_c_rate_edited
 #
 #
 # def average_c_rates_dups(bess_test_data, key2test_value):
