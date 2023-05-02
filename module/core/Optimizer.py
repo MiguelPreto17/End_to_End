@@ -38,11 +38,14 @@ class Optimizer:
 		self.stat = None  # stores the status of the milp solution
 		self.varis = None  # Dictionary to store all output variables values
 		self.outputs = None  # Dictionary with the same structure as the outputs JSON that will be sent to the client
-		# self.plot = plot  # If True, the results will be plotted after solving the MILP; only for test mode
+		self.plot = plot  # If True, the results will be plotted after solving the MILP; only for test mode
 		# **************************************************************************************************************
 		#         SYSTEM SETTINGS
 		# **************************************************************************************************************
 		self.pcc_limit_value = None  # power limit that can be transacted with the grid at PCC in kW
+		self.add_on_inv = None  # activate add-on to calculate piecewise inverters' efficiencies' segments?
+		self.seg_series = range(2)  # iterator over the number of segments considered (hardcoded to 2)
+		self.add_on_soc = None  # activate add-on that considers the more realistic battery characteristics?
 		# **************************************************************************************************************
 		#         BESS PARAMETERS
 		# **************************************************************************************************************
@@ -52,7 +55,7 @@ class Optimizer:
 		# **************************************************************************************************************
 		self.pv_forecasts = None  # forecasted generation, in kWh, of the PV plant
 		self.load_forecasts = None  # forecasted_demand, in kWh, of the inflexible load
-		# self.feedin_tariffs = None  # forecasted feed-in-tariffs in €/kWh
+		self.feedin_tariffs = None  # forecasted feed-in-tariffs in €/kWh
 		self.market_prices = None  # forecasted market prices in €/kWh
 
 	def initialize(self, settings, bess_asset, milp_params, measures, forecasts):
@@ -87,16 +90,20 @@ class Optimizer:
 
 		# System settings
 		self.pcc_limit_value = settings.get('pccLimitValue')
+		self.add_on_soc = settings['addOnSoc']
+		self.add_on_inv = settings['addOnInv']
 
 		# BESS parameters
 		self.bess = BESS()
-		self.bess.configure(bess_asset, measures.get('bessSoC'))
+		subset_add_ons = {add_on: settings[add_on] for add_on in ('addOnSoc', 'addOnInv')}
+		subset_add_ons['addOnDeg'] = False
+		self.bess.configure(bess_asset, measures.get('bessSoC'), subset_add_ons)
 
 		# Parse forecasts
 		self.pv_forecasts = forecasts.get('pvForecasts')
 		self.load_forecasts = forecasts.get('loadForecasts')
 		self.market_prices = forecasts.get('marketPrices')
-		# self.feedin_tariffs = forecasts.get('feedinTariffs')
+		self.feedin_tariffs = forecasts.get('feedinTariffs')
 
 	def solve_milp(self):
 		"""
@@ -132,6 +139,16 @@ class Optimizer:
 		#        ADDITIONAL PARAMETERS
 		# **************************************************************************************************************
 		T = self.time_series
+		S = self.seg_series
+		# To calculate the dynamic energy content limits, in kWh, a linearization was generated which is dependent on
+		# the charge/discharge current (kA) and not directly on the charge/discharge power (kW).
+		# Being so, we create a constant here that will
+		# 1) multiply the slope of the line by the charge/discharge power and
+		# 2) divide that power by the nominal charge/discharge voltage in order to transform that power set point
+		# into a current set point
+		if self.add_on_soc:
+			_dslope = self.bess.discharge_slope / self.bess.v_nom_discharge
+			_cslope = self.bess.charge_slope / self.bess.v_nom_charge
 
 		# **************************************************************************************************************
 		#        OPTIMIZATION PROBLEM
@@ -149,26 +166,51 @@ class Optimizer:
 		delta_pcc = [LpVariable(f'delta_pcc_{t:03d}', cat=LpBinary) for t in T]
 		# Energy content of the BESS (kWh)
 		e_bess = [LpVariable(f'e_bess_{t:03d}', lowBound=0) for t in T]
-		# Charge P at AC-side of the BESS (kW)
-		p_ch = [LpVariable(f'p_ch_{t:03d}', lowBound=0) for t in T]
-		# Discharge P at AC-side of the BESS (kW)
-		p_disch = [LpVariable(f'p_disch_{t:03d}', lowBound=0) for t in T]
-		# Aux. binary variable for non simultaneity of BESS flows
-		delta_bess = [LpVariable(f'delta_bess_{t:03d}', cat=LpBinary) for t in T]
+		# Energy degraded per time step (kWh)
+		e_deg = [LpVariable(f'e_deg_{t:03d}', lowBound=0) for t in T]
+		# Max E content for p_ch set point (kWh)
+		max_e_bes = [LpVariable(f'max_e_bes_{t:03d}', lowBound=0) for t in T]
+		# Min E content for p_disch set point (kWh)
+		min_e_bes = [LpVariable(f'min_e_bes_{t:03d}', lowBound=0) for t in T]
+
+		if not self.add_on_inv:
+			# Charge P at AC-side of the BESS (kW)
+			p_ch = [LpVariable(f'p_ch_{t:03d}', lowBound=0) for t in T]
+			# Discharge P at AC-side of the BESS (kW)
+			p_disch = [LpVariable(f'p_disch_{t:03d}', lowBound=0) for t in T]
+			# Aux. binary variable for non simultaneity of BESS flows
+			delta_bess = [LpVariable(f'delta_bess_{t:03d}', cat=LpBinary) for t in T]
+		else:
+			# Charge P in 1st segment at DC-side of the BESS (kW)
+			z_ch = [LpVariable(f'z_ch_{t:03d}', lowBound=0) for t in T]
+			# Discharge P in 1st segment at DC-side of the BESS (kW)
+			z_disch = [LpVariable(f'z_disch_{t:03d}', lowBound=0) for t in T]
+			# Charge P at AC-side of the BESS (kW)
+			p_ch = {s: [LpVariable(f'p_ch_{s}_{t:03d}', lowBound=0) for t in T] for s in S}
+			# Discharge P at AC-side of the BESS (kW)
+			p_disch = {s: [LpVariable(f'p_disch_{s}_{t:03d}', lowBound=0) for t in T] for s in S}
+			# Aux. binary for setting the charge limits of the BESS
+			delta_bess_ch = {s: [LpVariable(f'delta_bess_ch_{s}_{t:03d}', cat=LpBinary) for t in T] for s in S}
+			# Aux. binary for setting the discharge limits of the BESS
+			delta_bess_disch = {s: [LpVariable(f'delta_bess_disch_{s}_{t:03d}', cat=LpBinary) for t in T] for s in S}
 
 		# **************************************************************************************************************
 		#        OBJECTIVE FUNCTION
 		# **************************************************************************************************************
 		# Eq. (1)
-		self.milp += lpSum(p_abs[t] * self.market_prices[t] for t in self.time_series) * self.step_in_hours, 'Objective Function'
+		self.milp += lpSum(p_abs[t] * self.market_prices[t] - p_inj[t] * self.feedin_tariffs[t]
+		                   for t in self.time_series) * self.step_in_hours, 'Objective Function'
 
 		# **************************************************************************************************************
 		#           CONSTRAINTS
 		# **************************************************************************************************************
 		for t in self.time_series:
 			# Eq. (2)
-			# -- define P charged - P discharged for each t
-			bess_flows = p_ch[t] - p_disch[t]
+			# -- define P charged - P discharged for each t, depending on the activation of addOnInv
+			if not self.add_on_inv:
+				bess_flows = p_ch[t] - p_disch[t]
+			else:
+				bess_flows = lpSum((p_ch[s][t] - p_disch[s][t]) for s in S)
 			#  -- define the liquid consumption as load - generation (without bess flows)
 			generation_and_demand = (self.load_forecasts[t] - self.pv_forecasts[t])
 			self.milp += p_abs[t] - p_inj[t] == bess_flows + generation_and_demand, f'Equilibrium_{t:03d}'
@@ -179,24 +221,91 @@ class Optimizer:
 			# Eq. (4)
 			self.milp += p_inj[t] <= self.pcc_limit_value * (1 - delta_pcc[t]), f'PCC_inj_limit_{t:03d}'
 
+			if not self.add_on_inv:
+				# Define variables for charging and discharging at DC-side
+				bes_charge = p_ch[t] * self.bess.const_eff_ch
+				bes_discharge = p_disch[t] * 1 / self.bess.const_eff_disch
+
 			# Eq. (5)
-			self.milp += p_ch[t] <= self.bess.p_dc_max_c * delta_bess[t], f'Max_DC_charge_rate_{t:03d}'
+				self.milp += p_ch[t] <= self.bess.p_ac_max_c * delta_bess[t], \
+				             f'Max_AC_charge_rate_{t:03d}'
 			# Eq. (6)
-			self.milp += p_disch[t] <= self.bess.p_dc_max_d * (1 - delta_bess[t]), f'Max_DC_discharge_rate_{t:03d}'
+				self.milp += p_disch[t] <= self.bess.p_ac_max_d * (1 - delta_bess[t]), \
+				             f'Max_AC_discharge_rate_{t:03d}'
+
+			else:
+				# Define variables for charging and discharging at DC-side
+				bes_charge = z_ch[t] + p_ch[1][t] * self.bess.const_eff_ch
+				bes_discharge = z_disch[t] + p_disch[1][t] * 1 / self.bess.const_eff_disch
+
+				# Eq. (16) and (17)
+				# -- define the applicable charge and discharge limits at AC-side
+				for s in self.seg_series:
+					if s == 0:
+						min_climit = self.bess.p_ac_min_c_1 * delta_bess_ch[s][t]
+						max_climit = self.bess.p_ac_max_c_1 * delta_bess_ch[s][t]
+						min_dlimit = self.bess.p_ac_min_d_1 * delta_bess_disch[s][t]
+						max_dlimit = self.bess.p_ac_max_d_1 * delta_bess_disch[s][t]
+					else:
+						min_climit = self.bess.p_ac_min_c_2 * delta_bess_ch[s][t]
+						max_climit = self.bess.p_ac_max_c * delta_bess_ch[s][t]
+						min_dlimit = self.bess.p_ac_min_d_2 * delta_bess_disch[s][t]
+						max_dlimit = self.bess.p_ac_max_d * delta_bess_disch[s][t]
+					# -- Eq. (16 left-side)
+					self.milp += min_climit <= p_ch[s][t], f'Min_AC_charge_rate_{s}_{t:03d}'
+					# -- Eq. (16 right-side)
+					self.milp += p_ch[s][t] <= max_climit, f'Max_AC_charge_rate_{s}_{t:03d}'
+					# -- Eq. (17 left-side)
+					self.milp += min_dlimit <= p_disch[s][t], f'Min_AC_discharge_rate_{s}_{t:03d}'
+					# -- Eq. (17 right-side)
+					self.milp += p_disch[s][t] <= max_dlimit, f'Max_AC_discharge_rate_{s}_{t:03d}'
+
+				# Eq. (25)
+				self.milp += z_ch[t] == self.bess.sl_eff_ch * p_ch[0][t] \
+				             + self.bess.or_eff_ch * delta_bess_ch[0][t], \
+				             f'Z_ch_{t:03d}'
+				# Eq. (26)
+				self.milp += z_disch[t] == self.bess.sl_eff_disch * p_disch[0][t] \
+				             + self.bess.or_eff_disch * delta_bess_disch[0][t], \
+							 f'Z_disch_{t:03d}'
+
+				# Eq. (27)
+				self.milp += lpSum((delta_bess_ch[s][t] + delta_bess_disch[s][t]) for s in self.seg_series) <= 1, \
+							 f'Non_BESS_simultaneity_{t:03d}'
+
+			# Eq. (7) / (18)
+			self.milp += bes_charge <= self.bess.p_dc_max_c, f'Max_DC_charge_rate_{t:03d}'
+			# Eq. (8) / (19)
+			self.milp += bes_discharge <= self.bess.p_dc_max_d, f'Max_DC_discharge_rate_{t:03d}'
 
 			# Update to BESS energy content
-			e_bess_update = (p_ch[t] - p_disch[t]) * self.step_in_hours
+			e_bess_update = (bes_charge - bes_discharge) * self.step_in_hours
 			if t == 0:
-				# Eq. (7)
+				# Eq. (9) / (20)
 				self.milp += e_bess[t] == self.bess.initial_e_bess + e_bess_update, f'Initial_E_update_{t:03d}'
 			else:
-				# Eq. (8)
+				# Eq. (10) / (21)
 				self.milp += e_bess[t] == e_bess[t - 1] + e_bess_update, f'E_update_{t:03d}'
 
-			# Eq. (9 left-side)
-			self.milp += self.bess.min_e_bess <= e_bess[t], f'E_content_low_boundary_{t:03d}'
-			# Eq. (9 right-side)
-			self.milp += e_bess[t] <= self.bess.max_e_bess, f'E_content_high_boundary_{t:03d}'
+			# Define energy content limits
+			if self.add_on_soc:
+				absolute_minimum = _dslope * bes_charge + self.bess.discharge_origin
+				absolute_maximum = _cslope * bes_discharge + self.bess.charge_origin
+			else:
+				absolute_minimum = self.bess.min_e_bess
+				absolute_maximum = self.bess.max_e_bess
+			# Set left-side energy content limit
+			self.milp += min_e_bes[t] == absolute_minimum, f'Minimum_E_content_{t:03d}'
+			# Set right-side energy content limit
+			self.milp += max_e_bes[t] == absolute_maximum, f'Maximum_E_content_{t:03d}'
+
+			# Eq. (11 left-side) / (14 left-side) / (22 left-side)
+			self.milp += min_e_bes[t] <= e_bess[t], f'E_content_low_boundary_{t:03d}'
+			# Eq. (11 left-side) / (14 right-side) / (22 right-side)
+			self.milp += e_bess[t] <= max_e_bes[t], f'E_content_high_boundary_{t:03d}'
+
+			# Eq. (12) / (23)
+			self.milp += e_deg[t] == self.bess.deg_slope * bes_discharge * self.step_in_hours, f'Degradation_{t:03d}'
 
 		# **************************************************************************************************************
 
@@ -207,7 +316,6 @@ class Optimizer:
 		# The problem is solved using PuLP's choice of Solver
 		if self.solv == 'CBC':
 			self.milp.setSolver(pulp.PULP_CBC_CMD(msg=False, timeLimit=self.timeout, gapRel=self.mipgap, keepFiles=True))
-
 		elif self.solv == 'GUROBI':
 			self.milp.setSolver(GUROBI_CMD(msg=False, timeLimit=self.timeout, mip=self.mipgap))
 
@@ -227,16 +335,16 @@ class Optimizer:
 			self.__get_variables_values()
 			self.__initialize_and_populate_outputs()
 
-		# # Generate the outputs JSON file
-		# master_path = os.path.abspath(os.path.join(__file__, '..', '..', '..'))
-		# structures_path = os.path.join('json', 'outputs.json')
-		# output_path = os.path.join(master_path, structures_path)
-		# with open(output_path, 'w') as outfile:
-		# 	json.dump(self.outputs, outfile)
+		# Generate the outputs JSON file
+		master_path = os.path.abspath(os.path.join(__file__, '..', '..', '..'))
+		structures_path = os.path.join('json', 'outputs.json')
+		output_path = os.path.join(master_path, structures_path)
+		with open(output_path, 'w') as outfile:
+			json.dump(self.outputs, outfile)
 
-		# if self.plot:
-		# 	from graphics.plot_results import plot_results
-		# 	plot_results(self)
+		if self.plot:
+			from graphics.plot_results import plot_results
+			plot_results(self)
 
 	def __get_variables_values(self):
 		"""
@@ -257,12 +365,33 @@ class Optimizer:
 		self.varis['delta_pcc'] = list(np.full(self.time_intervals, np.nan))
 		# Energy content of the BESS (kWh)
 		self.varis['e_bess'] = list(np.full(self.time_intervals, np.nan))
-		# Charge P at AC-side of the BESS (kW)
-		self.varis['p_ch'] = list(np.full(self.time_intervals, np.nan))
-		# Discharge P at AC-side of the BESS (kW)
-		self.varis['p_disch'] = list(np.full(self.time_intervals, np.nan))
-		# Aux. binary variable for non simultaneity of BESS flows
-		self.varis['delta_bess'] = list(np.full(self.time_intervals, np.nan))
+		# Energy degraded per time step (kWh)
+		self.varis['e_deg'] = list(np.full(self.time_intervals, np.nan))
+		# Max E content for p_ch set point (kWh)
+		self.varis['max_e_bes'] = list(np.full(self.time_intervals, np.nan))
+		# Min E content for p_disch set point (kWh)
+		self.varis['min_e_bes'] = list(np.full(self.time_intervals, np.nan))
+
+		if not self.add_on_inv:
+			# Charge P at AC-side of the BESS (kW)
+			self.varis['p_ch'] = list(np.full(self.time_intervals, np.nan))
+			# Discharge P at AC-side of the BESS (kW)
+			self.varis['p_disch'] = list(np.full(self.time_intervals, np.nan))
+			# Aux. binary variable for non simultaneity of BESS flows
+			self.varis['delta_bess'] = list(np.full(self.time_intervals, np.nan))
+		else:
+			# Charge P in 1st segment at DC-side of the BESS (kW)
+			self.varis['z_ch'] = list(np.full(self.time_intervals, np.nan))
+			# Discharge P in 1st segment at DC-side of the BESS (kW)
+			self.varis['z_disch'] = list(np.full(self.time_intervals, np.nan))
+			# Charge P at AC-side of the BESS (kW)
+			self.varis['p_ch'] = {s: list(np.full(self.time_intervals, np.nan)) for s in self.seg_series}
+			# Discharge P at AC-side of the BESS (kW)
+			self.varis['p_disch'] = {s: list(np.full(self.time_intervals, np.nan)) for s in self.seg_series}
+			# Aux. binary for setting the charge limits of the BESS
+			self.varis['delta_bess_ch'] = {s: list(np.full(self.time_intervals, np.nan)) for s in self.seg_series}
+			# Aux. binary for setting the discharge limits of the BESS
+			self.varis['delta_bess_disch'] = {s: list(np.full(self.time_intervals, np.nan)) for s in self.seg_series}
 
 		# **************************************************************************************************************
 		#        FILL DECISION VARIABLES
@@ -286,14 +415,40 @@ class Optimizer:
 			elif re.search(f'e_deg_', v.name):
 				self.varis['e_deg'][t] = v.varValue
 
-			elif re.search(f'p_ch_', v.name):
+			elif re.search(f'max_e_bes_', v.name):
+				self.varis['max_e_bes'][t] = v.varValue
+
+			elif re.search(f'min_e_bes_', v.name):
+				self.varis['min_e_bes'][t] = v.varValue
+
+			elif re.search(f'p_ch_', v.name) and not self.add_on_inv:
 				self.varis['p_ch'][t] = v.varValue
 
-			elif re.search(f'p_disch_', v.name):
+			elif re.search(f'p_disch_', v.name) and not self.add_on_inv:
 				self.varis['p_disch'][t] = v.varValue
 
-			elif re.search(f'delta_bess_', v.name):
+			elif re.search(f'delta_bess_', v.name) and not self.add_on_inv:
 				self.varis['delta_bess'][t] = v.varValue
+
+			elif re.search(f'z_ch_', v.name) and self.add_on_inv:
+				self.varis['z_ch'][t] = v.varValue
+
+			elif re.search(f'z_disch_', v.name) and self.add_on_inv:
+				self.varis['z_disch'][t] = v.varValue
+
+			else:
+				for s in self.seg_series:
+					if re.search(f'p_ch_{s}_', v.name) and self.add_on_inv:
+						self.varis[f'p_ch'][s][t] = v.varValue
+
+					elif re.search(f'p_disch_{s}_', v.name) and self.add_on_inv:
+						self.varis[f'p_disch'][s][t] = v.varValue
+
+					elif re.search(f'delta_bess_ch_{s}_', v.name) and self.add_on_inv:
+						self.varis[f'delta_bess_ch'][s][t] = v.varValue
+
+					elif re.search(f'delta_bess_disch_{s}_', v.name) and self.add_on_inv:
+						self.varis[f'delta_bess_disch'][s][t] = v.varValue
 
 	def __initialize_and_populate_outputs(self):
 		"""
@@ -301,9 +456,14 @@ class Optimizer:
 		:return: None
 		:rtype: None
 		"""
-
-		p_ch = self.varis.get('p_ch')
-		p_disch = self.varis.get('p_disch')
+		# Sum the variables p_ch and p_dis values across the different segments to obtain a single value per asset
+		# and per time step, in case add_on_inv is active
+		if not self.add_on_inv:
+			p_ch = self.varis.get('p_ch')
+			p_disch = self.varis.get('p_disch')
+		else:
+			p_ch = list(pd.DataFrame(self.varis.get('p_ch')).sum(axis=1))
+			p_disch = list(pd.DataFrame(self.varis.get('p_disch')).sum(axis=1))
 
 		# Create a list of the set points' datetime corresponding values, as strings, in ISO 8601 format
 		list_of_dates = mhelper.create_strftime_list(self.horizon, self.step_in_hours, self.start_at)
@@ -311,7 +471,7 @@ class Optimizer:
 		# Calculate the expected revenues
 		pcc_absorption = np.array(self.varis.get('p_abs'))
 		pcc_injection = np.array(self.varis.get('p_inj'))
-		of = (pcc_absorption * self.market_prices) * self.step_in_hours
+		of = (pcc_absorption * self.market_prices - pcc_injection * self.feedin_tariffs) * self.step_in_hours
 
 		# Initialize outputs as a dictionary
 		self.outputs = dict(
@@ -319,6 +479,7 @@ class Optimizer:
 			pCharge=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, p_ch)],
 			pDischarge=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, p_disch)],
 			eBess=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, self.varis.get('e_bess'))],
+			eDeg=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, self.varis.get('e_deg'))],
 			pAbs=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, self.varis.get('p_abs'))],
 			pInj=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, self.varis.get('p_inj'))],
 			expectRevs=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, of)]
