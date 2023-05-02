@@ -48,6 +48,15 @@ class GeneralSettings:
 	bess_min_soc = 0.0  # minimum SoC [%]
 	bess_reserve_soc = 0.0    # reserve SoC [%] (becomes minimum SoC if > bess_min_soc)
 	bess_v_nom = 720.0  # nominal voltage [V]
+
+	bess_initial_soc2 = 0.0  # SoC % at the beginning of the optimization horizon [%]
+	bess_e_nom2 = 40.0  # nominal energy capacity [kWh]
+	bess_max_soc2 = 100.0  # maximum SoC [%]
+	bess_min_soc2 = 0.0  # minimum SoC [%]
+	bess_v_nom2 = 720.0  # nominal voltage [V]
+	bess_max_power_Ch2 = 10.0  # BESS Max charging power [kW]
+	bess_max_power_Disch2 = 10.0  # BESS Max Discharging power [kW]
+
 	bess_deg_curve = [
 							{"nrCycles": 10000000, "dod": 1.0},
 							{"nrCycles": 900000, "dod": 5.0},

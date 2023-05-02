@@ -50,6 +50,7 @@ class Optimizer:
 		#         BESS PARAMETERS
 		# **************************************************************************************************************
 		self.bess = None  # harbours a class with methods and parameters used for all bess in the system
+		self.bess2 = None  # harbours a class with methods and parameters used for all bess in the system
 		# **************************************************************************************************************
 		#         FORECASTS
 		# **************************************************************************************************************
@@ -58,9 +59,13 @@ class Optimizer:
 		self.feedin_tariffs = None  # forecasted feed-in-tariffs in €/kWh
 		self.market_prices = None  # forecasted market prices in €/kWh
 
-	def initialize(self, settings, bess_asset, milp_params, measures, forecasts):
+	def initialize(self, settings, bess_asset, bess_asset2, milp_params, measures, measures2, forecasts):
 		"""
 		Function to initialize all internal variables of the Optimizer class with the inputs from the client.
+		:param measures2:
+		:type measures2: dict
+		:param bess_asset2:
+		:type bess_asset2: dict
 		:param settings: the system configuration settings
 		:type settings: dict
 		:param bess_asset: the BESS configured
@@ -98,6 +103,9 @@ class Optimizer:
 		subset_add_ons = {add_on: settings[add_on] for add_on in ('addOnSoc', 'addOnInv')}
 		subset_add_ons['addOnDeg'] = False
 		self.bess.configure(bess_asset, measures.get('bessSoC'), subset_add_ons)
+
+		self.bess2 = BESS()
+		self.bess2.configure(bess_asset2, measures2.get('bessSoC'))
 
 		# Parse forecasts
 		self.pv_forecasts = forecasts.get('pvForecasts')
@@ -193,6 +201,18 @@ class Optimizer:
 			delta_bess_ch = {s: [LpVariable(f'delta_bess_ch_{s}_{t:03d}', cat=LpBinary) for t in T] for s in S}
 			# Aux. binary for setting the discharge limits of the BESS
 			delta_bess_disch = {s: [LpVariable(f'delta_bess_disch_{s}_{t:03d}', cat=LpBinary) for t in T] for s in S}
+		# Charge P at AC-side of the BESS (kW)
+		e_bess2 = [LpVariable(f'e_bess2_{t:03d}', lowBound=0) for t in T]
+		# Charge P at AC-side of the BESS (kW)
+		p_ch = [LpVariable(f'p_ch_{t:03d}', lowBound=0) for t in T]
+		# Charge P at AC-side of the BESS (kW)
+		p_ch2 = [LpVariable(f'p_ch2_{t:03d}', lowBound=0) for t in T]
+		# Discharge P at AC-side of the BESS (kW)
+		p_disch = [LpVariable(f'p_disch_{t:03d}', lowBound=0) for t in T]
+		# Aux. binary variable for non simultaneity of BESS flows
+		p_disch2 = [LpVariable(f'p_disch2_{t:03d}', lowBound=0) for t in T]
+		# Aux. binary variable for non simultaneity of BESS flows
+		delta_bess = [LpVariable(f'delta_bess_{t:03d}', cat=LpBinary) for t in T]
 
 		# **************************************************************************************************************
 		#        OBJECTIVE FUNCTION
@@ -209,11 +229,14 @@ class Optimizer:
 			# -- define P charged - P discharged for each t, depending on the activation of addOnInv
 			if not self.add_on_inv:
 				bess_flows = p_ch[t] - p_disch[t]
+				bess_flows2 = p_ch2[t] - p_disch2[t]
 			else:
 				bess_flows = lpSum((p_ch[s][t] - p_disch[s][t]) for s in S)
+				bess_flows2 = lpSum((p_ch2[s][t] - p_disch2[s][t]) for s in S)
+
 			#  -- define the liquid consumption as load - generation (without bess flows)
 			generation_and_demand = (self.load_forecasts[t] - self.pv_forecasts[t])
-			self.milp += p_abs[t] - p_inj[t] == bess_flows + generation_and_demand, f'Equilibrium_{t:03d}'
+			self.milp += p_abs[t] - p_inj[t] == bess_flows + bess_flows2 + generation_and_demand, f'Equilibrium_{t:03d}'
 
 			# Eq. (3)
 			self.milp += p_abs[t] <= self.pcc_limit_value * delta_pcc[t], f'PCC_abs_limit_{t:03d}'
@@ -229,6 +252,10 @@ class Optimizer:
 			# Eq. (5)
 				self.milp += p_ch[t] <= self.bess.p_ac_max_c * delta_bess[t], \
 				             f'Max_AC_charge_rate_{t:03d}'
+			self.milp += p_ch[t] <= self.bess.p_dc_max_c * delta_bess[t], f'Max_DC_charge_rate_{t:03d}'
+			self.milp += p_ch2[t] <= self.bess2.p_dc_max_c * delta_bess[t], f'Max_DC_charge2_rate_{t:03d}'
+
+
 			# Eq. (6)
 				self.milp += p_disch[t] <= self.bess.p_ac_max_d * (1 - delta_bess[t]), \
 				             f'Max_AC_discharge_rate_{t:03d}'
@@ -277,6 +304,8 @@ class Optimizer:
 			self.milp += bes_charge <= self.bess.p_dc_max_c, f'Max_DC_charge_rate_{t:03d}'
 			# Eq. (8) / (19)
 			self.milp += bes_discharge <= self.bess.p_dc_max_d, f'Max_DC_discharge_rate_{t:03d}'
+			self.milp += p_disch[t] <= self.bess.p_dc_max_d * (1 - delta_bess[t]), f'Max_DC_discharge_rate_{t:03d}'
+			self.milp += p_disch2[t] <= self.bess2.p_dc_max_d * (1 - delta_bess[t]), f'Max_DC_discharge2_rate_{t:03d}'
 
 			# Update to BESS energy content
 			e_bess_update = (bes_charge - bes_discharge) * self.step_in_hours
@@ -306,6 +335,24 @@ class Optimizer:
 
 			# Eq. (12) / (23)
 			self.milp += e_deg[t] == self.bess.deg_slope * bes_discharge * self.step_in_hours, f'Degradation_{t:03d}'
+
+			e_bess2_update = (p_ch2[t] - p_disch2[t]) * self.step_in_hours
+			if t == 0:
+				# Eq. (7)
+				self.milp += e_bess2[t] == self.bess2.initial_e_bess + e_bess2_update, f'Initial_E_update2_{t:03d}'
+			else:
+				# Eq. (8)
+				self.milp += e_bess2[t] == e_bess2[t - 1] + e_bess2_update, f'E_update2_{t:03d}'
+
+
+			# Eq. (9 left-side)
+			self.milp += self.bess.min_e_bess <= e_bess[t], f'E_content_low_boundary_{t:03d}'
+			# Eq. (9 right-side)
+			self.milp += e_bess[t] <= self.bess.max_e_bess, f'E_content_high_boundary_{t:03d}'
+
+			self.milp += self.bess2.min_e_bess <= e_bess2[t], f'E_content_low_boundary2_{t:03d}'
+			# Eq. (9 right-side)
+			self.milp += e_bess2[t] <= self.bess2.max_e_bess, f'E_content_high_boundary2_{t:03d}'
 
 		# **************************************************************************************************************
 
@@ -392,6 +439,18 @@ class Optimizer:
 			self.varis['delta_bess_ch'] = {s: list(np.full(self.time_intervals, np.nan)) for s in self.seg_series}
 			# Aux. binary for setting the discharge limits of the BESS
 			self.varis['delta_bess_disch'] = {s: list(np.full(self.time_intervals, np.nan)) for s in self.seg_series}
+		# Charge P at AC-side of the BESS (kW)
+		self.varis['e_bess2'] = list(np.full(self.time_intervals, np.nan))
+		# Charge P at AC-side of the BESS (kW)
+		self.varis['p_ch'] = list(np.full(self.time_intervals, np.nan))
+		# Discharge P at AC-side of the BESS (kW)
+		self.varis['p_ch2'] = list(np.full(self.time_intervals, np.nan))
+		# Discharge P at AC-side of the BESS (kW)
+		self.varis['p_disch'] = list(np.full(self.time_intervals, np.nan))
+		# Aux. binary variable for non simultaneity of BESS flows
+		self.varis['p_disch2'] = list(np.full(self.time_intervals, np.nan))
+		# Aux. binary variable for non simultaneity of BESS flows
+		self.varis['delta_bess'] = list(np.full(self.time_intervals, np.nan))
 
 		# **************************************************************************************************************
 		#        FILL DECISION VARIABLES
@@ -412,6 +471,9 @@ class Optimizer:
 			elif re.search(f'e_bess_', v.name):
 				self.varis['e_bess'][t] = v.varValue
 
+			elif re.search(f'e_bess2_', v.name):
+				self.varis['e_bess2'][t] = v.varValue
+
 			elif re.search(f'e_deg_', v.name):
 				self.varis['e_deg'][t] = v.varValue
 
@@ -425,9 +487,17 @@ class Optimizer:
 				self.varis['p_ch'][t] = v.varValue
 
 			elif re.search(f'p_disch_', v.name) and not self.add_on_inv:
+			elif re.search(f'p_ch2_', v.name):
+				self.varis['p_ch2'][t] = v.varValue
+
+			elif re.search(f'p_disch_', v.name):
 				self.varis['p_disch'][t] = v.varValue
 
 			elif re.search(f'delta_bess_', v.name) and not self.add_on_inv:
+			elif re.search(f'p_disch2_', v.name):
+				self.varis['p_disch2'][t] = v.varValue
+
+			elif re.search(f'delta_bess_', v.name):
 				self.varis['delta_bess'][t] = v.varValue
 
 			elif re.search(f'z_ch_', v.name) and self.add_on_inv:
@@ -465,6 +535,11 @@ class Optimizer:
 			p_ch = list(pd.DataFrame(self.varis.get('p_ch')).sum(axis=1))
 			p_disch = list(pd.DataFrame(self.varis.get('p_disch')).sum(axis=1))
 
+		p_ch = self.varis.get('p_ch')
+		p_disch = self.varis.get('p_disch')
+		p_ch2 = self.varis.get('p_ch2')
+		p_disch2 = self.varis.get('p_disch2')
+
 		# Create a list of the set points' datetime corresponding values, as strings, in ISO 8601 format
 		list_of_dates = mhelper.create_strftime_list(self.horizon, self.step_in_hours, self.start_at)
 
@@ -480,6 +555,9 @@ class Optimizer:
 			pDischarge=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, p_disch)],
 			eBess=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, self.varis.get('e_bess'))],
 			eDeg=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, self.varis.get('e_deg'))],
+			pCharge2=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, p_ch2)],
+			pDischarge2=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, p_disch2)],
+			eBess2=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, self.varis.get('e_bess2'))],
 			pAbs=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, self.varis.get('p_abs'))],
 			pInj=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, self.varis.get('p_inj'))],
 			expectRevs=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, of)]

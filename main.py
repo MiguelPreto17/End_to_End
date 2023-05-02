@@ -29,7 +29,7 @@ def read_data(step):
 
 	# Read data in .csv as a dataframe; read index as datetime
 	dateparse = lambda x: dt.datetime.strptime(x, '%d/%m/%Y  %H:%M')
-	data = pd.read_csv('input/data.csv', parse_dates=['date'], index_col='date', decimal=',', sep=';',
+	data = pd.read_csv('input/input_data.csv', parse_dates=['date'], index_col='date', decimal=',', sep=';',
 	                   date_parser=dateparse)
 	data.index.rename('datetime', inplace=True)
 
@@ -56,20 +56,22 @@ def read_data(step):
 	return data
 
 
-def optimize(_settings, _assets, _milp_params, _measures, _forecasts):
+def optimize(_settings, _assets, _assets2, _milp_params, _measures, _measures2,  _forecasts):
 	"""
 	Main optimization orchestrator.
 	:param _settings:
 	:param _assets:
+	:param _assets2:
 	:param _milp_params:
 	:param _measures:
+	:param _measures2:
 	:param _forecasts:
 	:return:
 	"""
 	config_t = time()
 	logger.info(f'Configuring data for MILP...')
 	problem = Optimizer(plot=GeneralSettings.plot, solver='CBC')
-	problem.initialize(_settings, _assets, _milp_params, _measures, _forecasts)
+	problem.initialize(_settings, _assets, _assets2, _milp_params, _measures, _measures2, _forecasts)
 	logger.info(f'Configuring data for MILP ... OK! ({time() - config_t:.3f}s)')
 
 	solve_t = time()
@@ -124,11 +126,14 @@ if __name__ == '__main__':
 			degraded = 0
 			init = first_dt
 			soc = GeneralSettings.bess_initial_soc
+			soc2 = GeneralSettings.bess_initial_soc2
 		else:
 			degraded += degradation
 			init += dt.timedelta(days=1)
 			last_soc /= (GeneralSettings.bess_e_nom - degraded) * 100
 			soc = last_soc
+			last_soc2 /= (GeneralSettings.bess_e_nom2) * 100
+			soc2 = last_soc2
 
 		before_init = init - dt.timedelta(hours=1)
 
@@ -161,6 +166,16 @@ if __name__ == '__main__':
 			'vNom': GeneralSettings.bess_v_nom,
 		}
 
+		bess_asset2 = {
+			'actualENom': GeneralSettings.bess_e_nom2,
+			'eNom': GeneralSettings.bess_e_nom2,
+			'maxSoc': GeneralSettings.bess_max_soc2,
+			'minSoc': GeneralSettings.bess_min_soc2,
+			'vNom': GeneralSettings.bess_v_nom2,
+			'bess_max_power_Ch': GeneralSettings.bess_max_power_Ch2,
+			'bess_max_power_Disch': GeneralSettings.bess_max_power_Disch2,
+		}
+
 		milp_params = {
 			'mipgap': GeneralSettings.mipgap,
 			'timeout': GeneralSettings.timeout,
@@ -173,6 +188,10 @@ if __name__ == '__main__':
 			'bessSoC':  soc,
 		}
 
+		measures2 = {
+			'bessSoC': soc2,
+		}
+
 		forecasts_and_other_arrays = {
 			'pvForecasts': df['pv'].values,
 			'loadForecasts': df['load'].values,
@@ -182,7 +201,8 @@ if __name__ == '__main__':
 
 		# Run optimization
 		t0 = time()
-		prob_obj = optimize(settings, bess_asset, milp_params, measures, forecasts_and_other_arrays)
+
+		prob_obj = optimize(settings, bess_asset, bess_asset2, milp_params, measures, measures2, forecasts_and_other_arrays)
 		t1 = time() - t0
 
 		# Get the needed outputs
@@ -208,6 +228,7 @@ if __name__ == '__main__':
 		expected_revenues = pd.DataFrame(outputs.get('expectRevs')).sum().get('setpoint')
 		last_soc = pd.DataFrame(outputs['eBess']).loc[prob_obj.time_intervals-1, 'setpoint']
 		degradation = pd.DataFrame(outputs['eDeg']).sum().get('setpoint')
+		last_soc2 = pd.DataFrame(outputs['eBess2']).loc[prob_obj.time_intervals - 1, 'setpoint']
 		first_dt_text = dt.datetime.strftime(first_dt, '%Y-%m-%d %H:%M:%S')
 
 		with open(f'{prob_obj.common_fname}-pulp.sol', newline='\n') as csvfile:
