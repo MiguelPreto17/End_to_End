@@ -12,7 +12,6 @@ import warnings
 from datetime import datetime
 from matplotlib.lines import Line2D
 
-kelvin_celsius = 273.15
 
 warnings.filterwarnings("ignore")
 
@@ -69,15 +68,11 @@ def plot_results(obj):
 	market = pd.Series(obj.market_prices)  # €/kWh
 	feedin = pd.Series(obj.feedin_tariffs)  # €/kWh
 
-	# -- TEMPERATURES PLOT ---------------------------------------------------------------------------------------
-	temp = pd.DataFrame(obj.varis['temp_C'])  # ºC
-	temp_env = pd.DataFrame(obj.temp_env - kelvin_celsius)  # ºC
-
 	# **************************************************************************************************************
 	#        PLOTS
 	# **************************************************************************************************************
 	matplotlib.rcParams.update({'font.size': 15})
-	nrows = 3
+	nrows = 2
 	fig, axes = plt.subplots(nrows=nrows, ncols=1, figsize=(30, 2.5*nrows), sharex=True)
 
 	# --- Title definition -----------------------------------------------------------------------------------------
@@ -104,6 +99,7 @@ def plot_results(obj):
 	ax2 = ax.twinx()
 
 	ax2.scatter(offset_series, market, label='Market prices', color='tomato', alpha=0.9, marker=7, s=100.0)
+
 	ax2.scatter(offset_series, feedin, label='Feedin tariffs', color='forestgreen', alpha=0.9, marker=6, s=100.0)
 
 	# Create handles
@@ -120,8 +116,6 @@ def plot_results(obj):
 	box = ax.get_position()
 	ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
 	ax.xaxis.set_tick_params(labelbottom=True)
-	for label in ax.xaxis.get_ticklabels()[::2]:
-		label.set_visible(False)
 
 	vertical += 1
 
@@ -134,6 +128,10 @@ def plot_results(obj):
 	e_bess.plot(kind='bar', width=1.0, align='edge', edgecolor='steelblue', color='cornflowerblue', alpha=0.5,
 	            ax=ax)
 
+	for i in time_series:
+		ax.hlines(y=max_e_bes[i], xmin=i, xmax=i+1, linewidth=2.0, color='darkslategrey', linestyle='--')
+		ax.hlines(y=min_e_bes[i], xmin=i, xmax=i+1, linewidth=2.0, color='teal', linestyle='--')
+
 	# Create handles from scratch
 	handles.append(mpatches.Patch(edgecolor='steelblue', color='cornflowerblue', alpha=0.5, label=f'E content'))
 	handles.append(Line2D([0], [0], color='darkslategrey', linestyle='dashed', lw=2.0, label=f'Maximum E content'))
@@ -144,15 +142,10 @@ def plot_results(obj):
 
 	e_deg.plot(kind='bar', width=0.05, color='maroon', alpha=0.5, ax=ax2)
 
-	for i in time_series:
-		ax.hlines(y=max_e_bes[i], xmin=i, xmax=i+1, linewidth=2.0, color='darkslategrey', linestyle='--')
-		ax.hlines(y=min_e_bes[i], xmin=i, xmax=i+1, linewidth=2.0, color='teal', linestyle='--')
-
 	# Create handles from scratch
 	handles.append(mpatches.Patch(color='maroon', alpha=0.5, label=f'Energy content degraded'))
 
 	ax.legend(handles=handles, loc='center left', bbox_to_anchor=(1.03, 0.5), fancybox=True, shadow=True)
-	ax2.get_legend().set_visible(False)
 	ax.set_ylabel(f'E content [kWh]')
 	ax2.set_ylabel('E degraded [Wh]')
 	ax.grid(which='major', axis='x', linestyle='--')
@@ -160,8 +153,6 @@ def plot_results(obj):
 	box = ax.get_position()
 	ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
 	ax.xaxis.set_tick_params(labelbottom=True)
-	for label in ax.xaxis.get_ticklabels()[::2]:
-		label.set_visible(False)
 
 	vertical += 1
 
@@ -170,33 +161,5 @@ def plot_results(obj):
 	for ax in fig.axes:
 		plt.setp(ax.get_xticklabels(), visible=False)
 		plt.setp(ax.get_xticklabels()[::4], visible=True)
-
-	# **************************************************************************************************************
-	#        PLOT 3 - Battery and environment temperature
-	# **************************************************************************************************************
-	handles = []
-	ax = axes[vertical]
-
-	temp.plot(kind='bar', ax=ax, color='green',align='edge', label='Battery Temp (ªC))')
-	temp_env.plot(kind='bar', ax=ax, position=-1.0, color='orange', label='Environment Temp (ªC)')
-
-	handles.append(mpatches.Patch(color='green', edgecolor='steelblue', alpha=0.7, label='Battery temp (ºC))'))
-	handles.append(mpatches.Patch(color='darkorange', edgecolor='maroon', alpha=0.7, label='Environment temp (ºC)'))
-	handles.append(Line2D([0], [0], color='darkslategrey', linestyle='dashed', lw=2.0, label='AC activation temp (ºC)'))
-
-	ax.legend(handles=handles, loc='center left', bbox_to_anchor=(1.03, 0.5), fancybox=True, shadow=True)
-	ax.set_ylabel('ºC')
-	ax.grid(which='major', axis='x', linestyle='--')
-
-	box = ax.get_position()
-	ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
-	ax.xaxis.set_tick_params(labelbottom=True)
-	for label in ax.xaxis.get_ticklabels()[::2]:
-		label.set_visible(False)
-
-	for i in time_series:
-		#ax.hlines(y=obj.bess.T_lower_bound - kelvin_celsius, xmin=i, xmax=i+1, linewidth=2.0, color='darkslategrey', linestyle='--')
-		#ax.hlines(y=obj.bess.T_upper_bound - kelvin_celsius, xmin=i, xmax=i+1, linewidth=2.0, color='darkslategrey', linestyle='--')
-		ax.hlines(y=obj.bess.T_on_HVAC - kelvin_celsius, xmin=i, xmax=i + 1, linewidth=2.0, color='darkslategrey', linestyle='--')
 
 	plt.savefig(rf'outputs/{obj.common_fname}.png')

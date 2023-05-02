@@ -29,13 +29,13 @@ def read_data(step):
 
 	# Read data in .csv as a dataframe; read index as datetime
 	dateparse = lambda x: dt.datetime.strptime(x, '%d/%m/%Y  %H:%M')
-	data = pd.read_csv('input/input_data.csv', parse_dates=['date'], index_col='date', decimal=',', sep=';',
+	data = pd.read_csv('input/data.csv', parse_dates=['date'], index_col='date', decimal=',', sep=';',
 	                   date_parser=dateparse)
 	data.index.rename('datetime', inplace=True)
 
 	# Fix lacking market and feed-in values
 	data['market'].replace(to_replace=0, method='ffill', inplace=True)
-	# data['feedin'].replace(to_replace=0, method='ffill', inplace=True)
+	data['feedin'].replace(to_replace=0, method='ffill', inplace=True)
 
 	# Scale data by nominal values of the configured assets
 	data['pv'] *= GeneralSettings.scale_pv  # PV nominal power in kW - generation set points now in kWh
@@ -88,7 +88,7 @@ def optimize(_settings, _assets, _milp_params, _measures, _forecasts):
 if __name__ == '__main__':
 	# Set paths
 	ROOT_PATH = os.path.abspath(os.path.join(__file__, '..'))
-	# JSON_PATH = os.path.join(ROOT_PATH, 'json')
+	JSON_PATH = os.path.join(ROOT_PATH, 'json')
 	HELPERS_PATH = os.path.join(ROOT_PATH, 'helpers')
 
 	# Set loggers
@@ -121,11 +121,13 @@ if __name__ == '__main__':
 
 		# Updates between runs
 		if iteration == 1:
+			degraded = 0
 			init = first_dt
 			soc = GeneralSettings.bess_initial_soc
 		else:
+			degraded += degradation
 			init += dt.timedelta(days=1)
-			last_soc /= (GeneralSettings.bess_e_nom) * 100
+			last_soc /= (GeneralSettings.bess_e_nom - degraded) * 100
 			soc = last_soc
 
 		before_init = init - dt.timedelta(hours=1)
@@ -133,16 +135,30 @@ if __name__ == '__main__':
 		# Preparing inputs for optimization (format is API-friendly)
 		settings = {
 			'pccLimitValue': GeneralSettings.pcc_limit_value,
+			'addOnInv': GeneralSettings.add_on_inv,
+			'addOnSoc': GeneralSettings.add_on_soc,
 		}
 
+		original_test_data = deepcopy(GeneralSettings.bess_test_data)
 		bess_asset = {
-			'actualENom': GeneralSettings.bess_e_nom,
+			'actualENom': GeneralSettings.bess_e_nom - degraded,
+			'chEff': GeneralSettings.bess_ch_eff,
+			'degCurve': GeneralSettings.bess_deg_curve,
+			'dischEff': GeneralSettings.bess_disch_eff,
 			'eNom': GeneralSettings.bess_e_nom,
+			'eolCriterion': GeneralSettings.bess_eol_criterion,
+			'invMaxIDC': GeneralSettings.bess_inv_max_idc,
+			'invSNom': GeneralSettings.bess_inv_s_nom,
+			'invVNom': GeneralSettings.bess_inv_v_nom,
+			'maxCCh': GeneralSettings.bess_max_c_ch,
+			'maxCDch': GeneralSettings.bess_max_c_disch,
 			'maxSoc': GeneralSettings.bess_max_soc,
+			'minPCh': GeneralSettings.bess_min_p_ch,
+			'minPDch': GeneralSettings.bess_min_p_disch,
 			'minSoc': GeneralSettings.bess_min_soc,
+			'reserveSoc': GeneralSettings.bess_reserve_soc,
+			'testData': original_test_data,
 			'vNom': GeneralSettings.bess_v_nom,
-			'bess_max_power_Ch': GeneralSettings.bess_max_power_Ch,
-			'bess_max_power_Disch': GeneralSettings.bess_max_power_Disch,
 		}
 
 		milp_params = {
@@ -161,7 +177,7 @@ if __name__ == '__main__':
 			'pvForecasts': df['pv'].values,
 			'loadForecasts': df['load'].values,
 			'marketPrices': df['market'].values,
-			# 'feedinTariffs': df['feedin'].values,
+			'feedinTariffs': df['feedin'].values,
 		}
 
 		# Run optimization
@@ -191,6 +207,7 @@ if __name__ == '__main__':
 		logger.warning(f'{status}')
 		expected_revenues = pd.DataFrame(outputs.get('expectRevs')).sum().get('setpoint')
 		last_soc = pd.DataFrame(outputs['eBess']).loc[prob_obj.time_intervals-1, 'setpoint']
+		degradation = pd.DataFrame(outputs['eDeg']).sum().get('setpoint')
 		first_dt_text = dt.datetime.strftime(first_dt, '%Y-%m-%d %H:%M:%S')
 
 		with open(f'{prob_obj.common_fname}-pulp.sol', newline='\n') as csvfile:
@@ -206,6 +223,7 @@ if __name__ == '__main__':
 			'status': [],
 			'status_real': [],
 			'expected_revenues': [],
+			'degradation': [],
 			'last_soc': [],
 			'time': [],
 		}
@@ -213,6 +231,7 @@ if __name__ == '__main__':
 		final_outputs['status'].append(status)
 		final_outputs['status_real'].append(status_real)
 		final_outputs['expected_revenues'].append(expected_revenues)
+		final_outputs['degradation'].append(degradation)
 		final_outputs['last_soc'].append(last_soc)
 		final_outputs['time'].append(t1)
 
@@ -221,7 +240,7 @@ if __name__ == '__main__':
 	daily_outputs.to_csv(rf'outputs/{prob_obj.common_fname}_setpoints.csv',
 	                     sep=';', decimal=',', index=True)
 	pd.DataFrame(final_outputs).to_csv(rf'outputs/{prob_obj.common_fname}_main_outputs.csv',
-	                                   sep=';', decimal=',', index=False)
+	                                   sep=';', decimal=',', index=True)
 
 	# Remove the log file handler
 	remove_logfile_handler(logfile_handler_id)
