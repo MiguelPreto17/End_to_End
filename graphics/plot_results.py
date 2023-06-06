@@ -42,14 +42,26 @@ def plot_results(obj):
 	#        INITIALIZE VARIABLES
 	# ******************************************************************************************************************
 	horizon = obj.time_intervals
+	#all_days = obj.teste
 	aux_bar_length = 0.5
 	time_series = range(horizon)
+	#time_series = range(all_days)
+
+
 	offset_series = np.arange(0.5, horizon + 0.5, 1)
 	expected_revenues = pd.DataFrame(obj.outputs['expectRevs'])['setpoint'].sum()
+	e_deg2 = pd.DataFrame(obj.varis['e_deg2'])  # kWh
+	pabs = pd.DataFrame(obj.varis['p_abs'])
 
 	# -- BESS PLOT -----------------------------------------------------------------------------------------------------
 	e_bess = pd.DataFrame(obj.varis['e_bess'])  # kWh
+	e_bess2 = pd.DataFrame(obj.varis['e_bess2'])  # kWh
 	e_deg = pd.DataFrame(obj.varis['e_deg']) * 1E3  # Wh
+	total_deg = e_deg + e_deg2
+	market = pd.Series(obj.market_prices)  # €/kWh
+	feedin = pd.Series(obj.feedin_tariffs)  # €/kWh
+	cost = market * pabs
+	total_cost = cost + total_deg
 
 	if obj.add_on_soc:
 		max_e_bes = obj.varis['max_e_bes']  # kWh
@@ -65,14 +77,16 @@ def plot_results(obj):
 	inflex_demand = pd.DataFrame(obj.load_forecasts)  # kW
 
 	# -- PRICES AND TARIFFS PLOT ---------------------------------------------------------------------------------------
-	market = pd.Series(obj.market_prices)  # €/kWh
+	"""market = pd.Series(obj.market_prices)  # €/kWh
 	feedin = pd.Series(obj.feedin_tariffs)  # €/kWh
+	cost = market * pabs
+	total_cost = cost + total_deg"""
 
 	# **************************************************************************************************************
 	#        PLOTS
 	# **************************************************************************************************************
 	matplotlib.rcParams.update({'font.size': 15})
-	nrows = 2
+	nrows = 12
 	fig, axes = plt.subplots(nrows=nrows, ncols=1, figsize=(30, 2.5*nrows), sharex=True)
 
 	# --- Title definition -----------------------------------------------------------------------------------------
@@ -82,6 +96,7 @@ def plot_results(obj):
 	#        PLOT 1 - Generation, load, prices and tariffs
 	# **************************************************************************************************************
 	vertical = 0  # Vertical relative position of the plot
+
 	ax = axes[vertical]
 
 	pv_generation.plot(title=title, kind='bar', width=aux_bar_length, align='edge', edgecolor='steelblue',
@@ -162,4 +177,199 @@ def plot_results(obj):
 		plt.setp(ax.get_xticklabels(), visible=False)
 		plt.setp(ax.get_xticklabels()[::4], visible=True)
 
+
+
 	plt.savefig(rf'outputs/{obj.common_fname}.png')
+
+
+	# **************************************************************************************************************
+	#        PLOT 3 - BESS1
+	# **************************************************************************************************************
+
+	"""handles = []"""
+	handles = []
+	ax = axes[vertical]
+
+	e_bess.plot(kind='bar', width=1.0, align='edge', edgecolor='steelblue', color='cornflowerblue', alpha=0.5,
+				ax=ax)
+
+	ax.set_ylabel(f'E content [kWh]')
+
+	# Create handles from scratch
+	handles.append(mpatches.Patch(edgecolor='steelblue', color='cornflowerblue', alpha=0.5, label=f'E content'))
+	ax.legend(handles=handles, loc='center left', bbox_to_anchor=(1.03, 0.5), fancybox=True, shadow=True)
+
+	plt.savefig(rf'outputs/{obj.common_fname}.png')
+	vertical += 1
+
+	# **************************************************************************************************************
+	#        PLOT 4 - BESS2
+	# **************************************************************************************************************
+
+	"""handles = []"""
+	handles = []
+	ax = axes[vertical]
+
+	e_bess2.plot(kind='bar', width=1.0, align='edge', edgecolor='steelblue', color='cornflowerblue', alpha=0.5,
+				ax=ax)
+
+	ax.set_ylabel(f'E2 content [kWh]')
+
+	# Create handles from scratch
+	handles.append(mpatches.Patch(edgecolor='steelblue', color='cornflowerblue', alpha=0.5, label=f'E2 content'))
+	ax.legend(handles=handles, loc='center left', bbox_to_anchor=(1.03, 0.5), fancybox=True, shadow=True)
+
+	plt.savefig(rf'outputs/{obj.common_fname}.png')
+	vertical += 1
+
+	# **************************************************************************************************************
+	#        PLOT 5 - Degradation
+	# **************************************************************************************************************
+
+	handles = []
+	ax = axes[vertical]
+
+	e_deg.plot(kind='bar', width=1.0, align='edge', edgecolor='steelblue', color='maroon', alpha=0.5,
+				ax=ax)
+
+	ax.set_ylabel('E degraded [Wh]')
+
+	# Create handles from scratch
+	handles.append(mpatches.Patch(color='maroon', alpha=0.5, label=f'Energy degraded'))
+	ax.legend(handles=handles, loc='center left', bbox_to_anchor=(1.01, 0.5), fancybox=True, shadow=True)
+
+	plt.savefig(rf'outputs/{obj.common_fname}.png')
+	vertical += 1
+
+	# **************************************************************************************************************
+	#        PLOT 6 - Degradation2
+	# **************************************************************************************************************
+
+	handles = []
+	ax = axes[vertical]
+
+	e_deg2.plot(kind='bar', width=1.0, align='edge', edgecolor='steelblue', color='maroon', alpha=0.5,
+				ax=ax)
+
+	ax.set_ylabel('E2 degraded [Wh]')
+
+	# Create handles from scratch
+	handles.append(mpatches.Patch(color='maroon', alpha=0.5, label=f'Energy2 degraded'))
+	ax.legend(handles=handles, loc='center left', bbox_to_anchor=(1.01, 0.5), fancybox=True, shadow=True)
+
+	plt.savefig(rf'outputs/{obj.common_fname}.png')
+	vertical += 1
+
+	# **************************************************************************************************************
+	#        PLOT 7 - Total Degradation
+	# **************************************************************************************************************
+
+	handles = []
+	ax = axes[vertical]
+
+	total_deg.plot(kind='bar', width=1.0, align='edge', edgecolor='steelblue', color='maroon', alpha=0.5,
+				ax=ax)
+
+	ax.set_ylabel('Total E degraded [Wh]')
+
+	# Create handles from scratch
+	handles.append(mpatches.Patch(color='maroon', alpha=0.5, label=f'Total Energy degraded'))
+	ax.legend(handles=handles, loc='center left', bbox_to_anchor=(1.01, 0.5), fancybox=True, shadow=True)
+
+	plt.savefig(rf'outputs/{obj.common_fname}.png')
+	vertical += 1
+
+	# **************************************************************************************************************
+	#        PLOT 8 - Market
+	# **************************************************************************************************************
+
+	handles = []
+	ax = axes[vertical]
+
+	market.plot(kind='bar', width=1.0, align='edge', edgecolor='steelblue', color='forestgreen', alpha=0.5,
+				ax=ax)
+
+	ax.set_ylabel('Market [€]')
+
+	# Create handles from scratch
+	handles.append(mpatches.Patch(color='forestgreen', alpha=0.5, label=f'Price Market'))
+	ax.legend(handles=handles, loc='center left', bbox_to_anchor=(1.01, 0.5), fancybox=True, shadow=True)
+
+	plt.savefig(rf'outputs/{obj.common_fname}.png')
+	vertical += 1
+
+	# **************************************************************************************************************
+	#        PLOT 9 - Load
+	# **************************************************************************************************************
+
+	handles = []
+	ax = axes[vertical]
+
+	inflex_demand.plot(kind='bar', width=1.0, align='edge', edgecolor='maroon', color='forestgreen', alpha=0.5,
+				ax=ax)
+
+	ax.set_ylabel('Demand [kw]')
+
+	# Create handles from scratch
+	handles.append(mpatches.Patch(color='forestgreen', alpha=0.5, label=f'Load Demand'))
+	ax.legend(handles=handles, loc='center left', bbox_to_anchor=(1.01, 0.5), fancybox=True, shadow=True)
+
+	plt.savefig(rf'outputs/{obj.common_fname}.png')
+	vertical += 1
+
+	# **************************************************************************************************************
+	#        PLOT 10 - Pabs
+	# **************************************************************************************************************
+
+	handles = []
+	ax = axes[vertical]
+
+	pabs.plot(kind='bar', width=1.0, align='edge', edgecolor='maroon', color='forestgreen', alpha=0.5,
+					   ax=ax)
+
+	ax.set_ylabel('Pabs [kw]')
+
+	# Create handles from scratch
+	handles.append(mpatches.Patch(color='forestgreen', alpha=0.5, label=f'Pabs'))
+	ax.legend(handles=handles, loc='center left', bbox_to_anchor=(1.01, 0.5), fancybox=True, shadow=True)
+
+	plt.savefig(rf'outputs/{obj.common_fname}.png')
+	vertical += 1
+
+	# **************************************************************************************************************
+	#        PLOT 11 - Cost
+	# **************************************************************************************************************
+
+	handles = []
+	ax = axes[vertical]
+
+	cost.plot(kind='bar', width=1.0, align='edge', edgecolor='maroon', color='forestgreen', alpha=0.5,
+			  ax=ax)
+
+	ax.set_ylabel('Energy cost [kw]')
+
+	# Create handles from scratch
+	handles.append(mpatches.Patch(color='forestgreen', alpha=0.5, label=f'Energy cost'))
+	ax.legend(handles=handles, loc='center left', bbox_to_anchor=(1.01, 0.5), fancybox=True, shadow=True)
+
+	plt.savefig(rf'outputs/{obj.common_fname}.png')
+	vertical += 1
+
+	# **************************************************************************************************************
+	#        PLOT 12 - Total Cost
+	# **************************************************************************************************************
+
+	handles = []
+	ax = axes[vertical]
+
+	total_cost.plot(kind='bar', width=1.0, align='edge', edgecolor='maroon', color='forestgreen', alpha=0.5,
+					   ax=ax)
+
+	ax.set_ylabel('Total_Cost [$]')
+
+	# Create handles from scratch
+	handles.append(mpatches.Patch(color='forestgreen', alpha=0.5, label=f'Total_Cost'))
+	ax.legend(handles=handles, loc='center left', bbox_to_anchor=(1.01, 0.5), fancybox=True, shadow=True)
+
+	plt.savefig(rf'outputs/{obj.common_fname}.png')
+	vertical += 1

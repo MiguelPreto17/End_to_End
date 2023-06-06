@@ -47,6 +47,8 @@ class BESS:
         self.p_ac_max_c = None  # Maximum power rate for charging (kVA)
         self.p_ac_max_d = None  # Maximum power rate for discharging (kVA)
 
+
+
         # Trapezium's S approach parameters
         # self.nr_trapeziums = None  # number of total trapeziums
         # self.trap_left_p = None  # list with the left P limits of each trapezium
@@ -80,7 +82,7 @@ class BESS:
         self.deg_curve = None  # Placeholder for degradation curves data provided
         self.deg_slope = None  # Degradation curve linearization slope
         self.lifetime = None  # Desired lifetime in years
-        self.degradation_level = None  # End Of Life Critenion in %
+        self.degradation_level = None  # End Of Life Criterion in %
         self.capacity_loss = None  # 100 - EOL Criterion
 
         # Efficiencies' data

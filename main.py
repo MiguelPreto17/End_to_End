@@ -29,7 +29,7 @@ def read_data(step):
 
 	# Read data in .csv as a dataframe; read index as datetime
 	dateparse = lambda x: dt.datetime.strptime(x, '%d/%m/%Y  %H:%M')
-	data = pd.read_csv('input/data.csv', parse_dates=['date'], index_col='date', decimal=',', sep=';',
+	data = pd.read_csv('input/input_data.csv', parse_dates=['date'], index_col='date', decimal=',', sep=';',
 	                   date_parser=dateparse)
 	data.index.rename('datetime', inplace=True)
 
@@ -56,20 +56,23 @@ def read_data(step):
 	return data
 
 
-def optimize(_settings, _assets, _milp_params, _measures, _forecasts):
+def optimize(_settings, _assets, _assets2, _milp_params, _measures, _measures2, _forecasts):
 	"""
 	Main optimization orchestrator.
 	:param _settings:
 	:param _assets:
+	:param _assets2:
 	:param _milp_params:
 	:param _measures:
+	:param _measures2:
 	:param _forecasts:
+
 	:return:
 	"""
 	config_t = time()
 	logger.info(f'Configuring data for MILP...')
 	problem = Optimizer(plot=GeneralSettings.plot, solver='CBC')
-	problem.initialize(_settings, _assets, _milp_params, _measures, _forecasts)
+	problem.initialize(_settings, _assets, _assets2, _milp_params, _measures, _measures2, _forecasts)
 	logger.info(f'Configuring data for MILP ... OK! ({time() - config_t:.3f}s)')
 
 	solve_t = time()
@@ -108,6 +111,28 @@ if __name__ == '__main__':
 	# Create a variable to store the main results
 	final_outputs = None
 
+
+
+	"""final_outputs ={
+		'datetime': [],
+		'status': [],
+		'status_real': [],
+		'expected_revenues': [],
+		'degradation': [],
+		'degradation2': [],
+		'last_soc': [],
+		'time': [],
+	}"""
+
+	expected_revenues = 0
+	last_soc = 0
+	last_soc2 = 0
+	degradation = 0
+	degradation2 = 0
+	total_degradation = 0
+	total = 0
+	first_dt_text = 0
+
 	for day in GeneralSettings.all_days:
 		# Log the current iteration
 		iteration += 1
@@ -122,13 +147,18 @@ if __name__ == '__main__':
 		# Updates between runs
 		if iteration == 1:
 			degraded = 0
+			degraded2 = 0
 			init = first_dt
 			soc = GeneralSettings.bess_initial_soc
+			soc2 = GeneralSettings.bess_initial_soc2
 		else:
 			degraded += degradation
+			degraded2 += degradation2
 			init += dt.timedelta(days=1)
 			last_soc /= (GeneralSettings.bess_e_nom - degraded) * 100
+			last_soc2 /= (GeneralSettings.bess_e_nom2 - degraded2) * 100
 			soc = last_soc
+			soc2 = last_soc2
 
 		before_init = init - dt.timedelta(hours=1)
 
@@ -140,6 +170,8 @@ if __name__ == '__main__':
 		}
 
 		original_test_data = deepcopy(GeneralSettings.bess_test_data)
+		original_test_data2 = deepcopy(GeneralSettings.bess_test_data2)
+
 		bess_asset = {
 			'actualENom': GeneralSettings.bess_e_nom - degraded,
 			'chEff': GeneralSettings.bess_ch_eff,
@@ -161,6 +193,29 @@ if __name__ == '__main__':
 			'vNom': GeneralSettings.bess_v_nom,
 		}
 
+		bess_asset2 = {
+			'actualENom': GeneralSettings.bess_e_nom2 - degraded2,
+			'chEff': GeneralSettings.bess_ch_eff2,
+			'degCurve': GeneralSettings.bess_deg_curve2,
+			'dischEff': GeneralSettings.bess_disch_eff2,
+			'eNom': GeneralSettings.bess_e_nom2,
+			'eolCriterion': GeneralSettings.bess_eol_criterion2,
+			'invMaxIDC': GeneralSettings.bess_inv_max_idc2,
+			'invSNom': GeneralSettings.bess_inv_s_nom2,
+			'invVNom': GeneralSettings.bess_inv_v_nom2,
+			'maxCCh': GeneralSettings.bess_max_c_ch2,
+			'maxCDch': GeneralSettings.bess_max_c_disch2,
+			'maxSoc': GeneralSettings.bess_max_soc2,
+			'minPCh': GeneralSettings.bess_min_p_ch2,
+			'minPDch': GeneralSettings.bess_min_p_disch2,
+			'minSoc': GeneralSettings.bess_min_soc2,
+			'reserveSoc': GeneralSettings.bess_reserve_soc2,
+			'testData': original_test_data2,
+			'vNom': GeneralSettings.bess_v_nom2,
+		}
+
+
+
 		milp_params = {
 			'mipgap': GeneralSettings.mipgap,
 			'timeout': GeneralSettings.timeout,
@@ -173,6 +228,10 @@ if __name__ == '__main__':
 			'bessSoC':  soc,
 		}
 
+		measures2 = {
+			'bessSoC': soc2,
+		}
+
 		forecasts_and_other_arrays = {
 			'pvForecasts': df['pv'].values,
 			'loadForecasts': df['load'].values,
@@ -182,11 +241,12 @@ if __name__ == '__main__':
 
 		# Run optimization
 		t0 = time()
-		prob_obj = optimize(settings, bess_asset, milp_params, measures, forecasts_and_other_arrays)
+		prob_obj = optimize(settings, bess_asset, bess_asset2, milp_params, measures, measures2, forecasts_and_other_arrays)
 		t1 = time() - t0
 
 		# Get the needed outputs
 		outputs = prob_obj.outputs
+
 		outputs.pop('milpStatus')
 
 		# -- get a single dataframe from all outputs
@@ -205,10 +265,18 @@ if __name__ == '__main__':
 
 		status = prob_obj.stat
 		logger.warning(f'{status}')
-		expected_revenues = pd.DataFrame(outputs.get('expectRevs')).sum().get('setpoint')
-		last_soc = pd.DataFrame(outputs['eBess']).loc[prob_obj.time_intervals-1, 'setpoint']
-		degradation = pd.DataFrame(outputs['eDeg']).sum().get('setpoint')
+
+
+		expected_revenues += pd.DataFrame(outputs.get('expectRevs')).sum().get('setpoint')
+		last_soc += pd.DataFrame(outputs['eBess']).loc[prob_obj.time_intervals-1, 'setpoint']
+		last_soc2 += pd.DataFrame(outputs['eBess2']).loc[prob_obj.time_intervals - 1, 'setpoint']
+		degradation += pd.DataFrame(outputs['eDeg']).sum().get('setpoint')
+		degradation2 += pd.DataFrame(outputs['eDeg2']).sum().get('setpoint')
+		total_degradation += pd.DataFrame(outputs.get('Totaldeg')).sum().get('setpoint')
+		total += pd.DataFrame(outputs.get('Total')).sum().get('setpoint')
 		first_dt_text = dt.datetime.strftime(first_dt, '%Y-%m-%d %H:%M:%S')
+
+
 
 		with open(f'{prob_obj.common_fname}-pulp.sol', newline='\n') as csvfile:
 			init_text = csvfile.read(50)
@@ -224,14 +292,21 @@ if __name__ == '__main__':
 			'status_real': [],
 			'expected_revenues': [],
 			'degradation': [],
+			'degradation2': [],
+			'total_degradation': [],
+			'total': [],
 			'last_soc': [],
 			'time': [],
 		}
+
 		final_outputs['datetime'].append(first_dt_text)
 		final_outputs['status'].append(status)
 		final_outputs['status_real'].append(status_real)
 		final_outputs['expected_revenues'].append(expected_revenues)
 		final_outputs['degradation'].append(degradation)
+		final_outputs['degradation2'].append(degradation2)
+		final_outputs['total_degradation'].append(total_degradation)
+		final_outputs['total'].append(total)
 		final_outputs['last_soc'].append(last_soc)
 		final_outputs['time'].append(t1)
 
