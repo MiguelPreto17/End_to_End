@@ -7,10 +7,15 @@ from module.tasks.BESS import BESS
 from loguru import logger
 from pulp import *
 from time import asctime
+from settings.general_settings import GeneralSettings
+
 
 seconds_in_min = 60
 minutes_in_hour = 60
-#hours_in_day = 24
+k1 = GeneralSettings.k1
+k2 = GeneralSettings.k2
+C1 = GeneralSettings.C1
+C2 = GeneralSettings.C2
 
 class Optimizer:
 	def __init__(self, plot=False, solver='CBC'):
@@ -110,8 +115,6 @@ class Optimizer:
 		self.bess.configure(bess_asset, measures.get('bessSoC'), subset_add_ons)
 		self.bess2.configure(bess_asset2, measures2.get('bessSoC'), subset_add_ons)
 
-		"""self.bess2 = BESS()
-		self.bess2.configure(bess_asset2, measures2.get('bessSoC'),subset_add_ons)"""
 
 		# Parse forecasts
 		self.pv_forecasts = forecasts.get('pvForecasts')
@@ -119,14 +122,14 @@ class Optimizer:
 		self.market_prices = forecasts.get('marketPrices')
 		self.feedin_tariffs = forecasts.get('feedinTariffs')
 
-	def solve_milp(self):
+	def solve_milp(self, a):
 		"""
 		Function that heads the definition and solution of the optimization problem.
 		:return: None
 		:rtype: None
 		"""
 		logger.debug(' - defining MILP')
-		self.milp = self.__define_milp()
+		self.milp = self.__define_milp(a)
 
 		logger.debug(' - actually solving MILP')
 		# noinspection PyBroadException
@@ -143,7 +146,7 @@ class Optimizer:
 		self.stat = stat
 		self.opt_val = opt_val
 
-	def __define_milp(self):
+	def __define_milp(self, a):
 		"""
 		Method to define the generic MILP problem.
 		:return: object with the milp problem ready for solving and easy access to all parameters, variables and results
@@ -255,7 +258,13 @@ class Optimizer:
 		# Eq. (1)
 		#self.milp += lpSum(p_abs[t] * self.market_prices[t] + e_deg[t] + e_deg2[t] for t in self.time_series) * self.step_in_hours, 'Objective Function'
 		#self.milp += lpSum(p_abs[t] * self.market_prices[t] for t in self.time_series) * self.step_in_hours, 'Objective Function'
-		self.milp += lpSum(p_abs[t] * self.market_prices[t] + 0.45 * e_deg[t] + 0.55 * e_deg2[t] for t in self.time_series) * self.step_in_hours, 'Objective Function'
+
+		if a == "A":
+			self.milp += lpSum(p_abs[t] * self.market_prices[t] + k1 * e_deg[t] + k2 * e_deg2[t] for t in self.time_series) * self.step_in_hours, 'Objective Function'
+		else:
+			#if a == "B" :
+		#elif a == "B":
+			self.milp += lpSum(p_abs[t] * self.market_prices[t] + C1 * e_deg[t] + C2 * e_deg2[t] for t in self.time_series) * self.step_in_hours, 'Objective Function'
 
 		#self.milp += lpSum(p_abs[t] * self.market_prices[t] - p_inj[t] * self.feedin_tariffs[t] for t in self.time_series) * self.step_in_hours, 'Objective Function'
 
@@ -448,7 +457,7 @@ class Optimizer:
 
 		return self.milp
 
-	def generate_outputs(self):
+	def generate_outputs(self, a):
 		"""
 		Function for generating the outputs of optimization, namely the set points for each asset and all relevant
 		variables, and to convert them into JSON format.
@@ -460,7 +469,7 @@ class Optimizer:
 			self.outputs = {}
 		else:
 			self.__get_variables_values()
-			self.__initialize_and_populate_outputs()
+			self.__initialize_and_populate_outputs(a)
 
 		# Generate the outputs JSON file
 		master_path = os.path.abspath(os.path.join(__file__, '..', '..', '..'))
@@ -645,7 +654,7 @@ class Optimizer:
 
 					elif re.search(f'delta_bess_disch2_{s}_', v.name) and self.add_on_inv:
 						self.varis[f'delta_bess_disch2'][s][t] = v.varValue
-	def __initialize_and_populate_outputs(self):
+	def __initialize_and_populate_outputs(self, a):
 		"""
 		Initializes and populates the outputs' structure as a dictionary matching the outputs JSON format.
 		:return: None
@@ -674,10 +683,20 @@ class Optimizer:
 		pcc_absorption = np.array(self.varis.get('p_abs'))
 		edeg = np.array(self.varis.get('e_deg'))
 		edeg2 = np.array(self.varis.get('e_deg2'))
-		#pcc_injection = np.array(self.varis.get('p_inj'))
 		of = (pcc_absorption * self.market_prices ) * self.step_in_hours
-		tot = (pcc_absorption * self.market_prices ) * self.step_in_hours + 0.45 * edeg + 0.55* edeg2
-		totdeg =  0.45 * edeg + 0.55 * edeg2
+
+
+		if a == "A":
+			totdeg = k1 * edeg + k2 * edeg2
+		else:
+		#elif a == "B":
+			totdeg = C1 * edeg + C2 * edeg2
+		#else:
+			#print("ERRO")
+		tot = of + totdeg
+		#merge = p_ch - p_disch
+		merge = np.array(self.varis.get('p_ch')) - np.array(self.varis.get('p_disch'))
+
 
 		#of = (pcc_absorption * self.market_prices - pcc_injection * self.feedin_tariffs) * self.step_in_hours
 
@@ -697,7 +716,7 @@ class Optimizer:
 			expectRevs=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, of)],
 			Totaldeg=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, totdeg)],
 			Total=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, tot)],
-
+			Merge=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, merge)],
 
 
 		)

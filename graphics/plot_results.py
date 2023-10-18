@@ -86,7 +86,7 @@ def plot_results(obj):
 	#        PLOTS
 	# **************************************************************************************************************
 	matplotlib.rcParams.update({'font.size': 15})
-	nrows = 12
+	nrows = 13
 	fig, axes = plt.subplots(nrows=nrows, ncols=1, figsize=(30, 2.5*nrows), sharex=True)
 
 	# --- Title definition -----------------------------------------------------------------------------------------

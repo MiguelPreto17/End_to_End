@@ -56,7 +56,7 @@ class BESS:
         # self.trap_left_q = None  # list with the left Q limits of each trapezium
         # self.trap_right_q = None  # list with the right Q limits of each trapezium
 
-        # BES's data
+        # BESS's data
         self.nominal_voltage = None  # Vdc
         self.initial_energy = None  # BESS initial energy capacity, before any degradation (kWh)
         self.nominal_energy = None  # kWh
