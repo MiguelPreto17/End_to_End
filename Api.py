@@ -8,6 +8,7 @@ from helpers.set_loggers import *
 from settings.general_settings import GeneralSettings
 from time import time
 from fastapi.responses import JSONResponse
+from copy import deepcopy
 
 app = FastAPI()
 
@@ -24,6 +25,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
 
 bess_asset = {
         'actualENom': [],
@@ -42,7 +45,7 @@ bess_asset = {
         'minPDch': GeneralSettings.bess_min_p_disch,
         'minSoc': GeneralSettings.bess_min_soc,
         'reserveSoc': GeneralSettings.bess_reserve_soc,
-        'testData': main.original_test_data,
+        'testData': GeneralSettings.bess_test_data,
         'vNom': GeneralSettings.bess_v_nom,
     }
 
@@ -51,25 +54,31 @@ async def objective_function(selected_option: str = Form(...)):
 
     a = selected_option
     print(a)
+    return a
 
 @app.post("/api/settings")
-async def settings(input_value: float = Form(...), table_data: list = Form(...)):
+async def settings(input_value: float = Form(...), date: list = Form(...), market: list = Form(...), load: list = Form(...)):
 
-    bess_asset['maxSoc'] = input_value
+    """bess_asset['maxSoc'] = input_value
     bess_asset['actualENom'] = input_value
-    bess_asset['eNom'] = input_value
-    z = table_data
+    bess_asset['eNom'] = input_value"""
+
+    #table_data = [{"date": date[i], "market": market[i], "load": load[i]} for i in range(len(date))]
+    table_data = [{"market": market[i], "load": load[i]} for i in range(len(market))]
+    print(table_data)
     step = GeneralSettings.step
-    read_data(table_data, step)
-    print(z)
+    data_df = read_data(table_data, step)
+
+    return data_df
 
 @app.post("/api/teste")
 async def teste(selected_option: str = Form(...), input_value: float = Form(...)):
 
     a = selected_option
     print(a)
-
-
+    bess_asset['maxSoc'] = input_value
+    bess_asset['actualENom'] = input_value
+    bess_asset['eNom'] = input_value
 
     t0 = time()
     prob_obj = optimize(main.settings, bess_asset, main.bess_asset2, main.milp_params, main.measures, main.measures2, main.forecasts_and_other_arrays, a)
@@ -130,15 +139,13 @@ async def teste(selected_option: str = Form(...), input_value: float = Form(...)
                                        sep=';', decimal=',', index=True)
 
     # Remove the log file handler
-    remove_logfile_handler(main.logfile_handler_id)
+    #remove_logfile_handler(main.logfile_handler_id)
 
     # Get the needed outputs
-    print(a)
-    print(main.daily_outputs)
+    #return(a)
+    return (main.daily_outputs)
 
 
 @app.get("/api/get_data_for_chart")
 async def get_data_for_chart():
-    data = list(main.final_outputs)
-    data2 = main.daily_outputs
-    return JSONResponse(content={"data": list(data)})"""
+    return (main.daily_outputs, main.final_outputs)

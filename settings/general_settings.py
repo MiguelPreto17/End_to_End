@@ -15,7 +15,7 @@ import random
 class GeneralSettings:
     add_on_inv = False
     add_on_soc = False
-    all_days = range(0,2)
+    all_days = range(0,31)
     plot = False
 
     # milp_params
@@ -35,10 +35,10 @@ class GeneralSettings:
     #0.785714
     #0.78571429
 
-    bess_max_c_ch = 0.785714  # maximum C-rate for charging [0, 1]
-    bess_max_c_disch = 0.785714  # maximum C-rate for charging [0, 1]
+    bess_max_c_ch = 1  # maximum C-rate for charging [0, 1]
+    bess_max_c_disch = 1  # maximum C-rate for charging [0, 1]
     bess_initial_soc = 0.0  # SoC % at the beginning of the optimization horizon [%]
-    bess_e_nom = 140
+    bess_e_nom = 100
     bess_eol_criterion = 70.0  # end-of-life criterion (i.e. soc % at end-of-life) [%]
     #bess_ch_eff = 100.0  # fixed charge efficiency [%]
     #bess_disch_eff = 100.0  # fixed discharge efficiency [%]
@@ -54,10 +54,10 @@ class GeneralSettings:
     bess_deg_curve = 1
 
 
-    bess_max_c_ch2 = 0.0 # maximum C-rate for charging [0, 1]
-    bess_max_c_disch2 = 0.0 # maximum C-rate for charging [0, 1]
+    bess_max_c_ch2 = 0.25 # maximum C-rate for charging [0, 1]
+    bess_max_c_disch2 = 0.25 # maximum C-rate for charging [0, 1]
     bess_initial_soc2 = 0.0  # SoC % at the beginning of the optimization horizon [%]
-    bess_e_nom2 = 0.000000001 # nominal energy capacity [kWh]
+    bess_e_nom2 = 40.0 # nominal energy capacity [kWh]
     bess_eol_criterion2 = 70.0  # end-of-life criterion (i.e. soc % at end-of-life) [%]
     #bess_ch_eff2 = 100.0  # fixed charge efficiency [%]
     #bess_disch_eff2 = 100.0  # fixed discharge efficiency [%]
