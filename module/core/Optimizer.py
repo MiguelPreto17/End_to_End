@@ -122,14 +122,14 @@ class Optimizer:
 		self.market_prices = forecasts.get('marketPrices')
 		self.feedin_tariffs = forecasts.get('feedinTariffs')
 
-	def solve_milp(self, a):
+	def solve_milp(self):
 		"""
 		Function that heads the definition and solution of the optimization problem.
 		:return: None
 		:rtype: None
 		"""
 		logger.debug(' - defining MILP')
-		self.milp = self.__define_milp(a)
+		self.milp = self.__define_milp()
 
 		logger.debug(' - actually solving MILP')
 		# noinspection PyBroadException
@@ -146,7 +146,7 @@ class Optimizer:
 		self.stat = stat
 		self.opt_val = opt_val
 
-	def __define_milp(self, a):
+	def __define_milp(self):
 		"""
 		Method to define the generic MILP problem.
 		:return: object with the milp problem ready for solving and easy access to all parameters, variables and results
@@ -259,12 +259,12 @@ class Optimizer:
 		#self.milp += lpSum(p_abs[t] * self.market_prices[t] + e_deg[t] + e_deg2[t] for t in self.time_series) * self.step_in_hours, 'Objective Function'
 		#self.milp += lpSum(p_abs[t] * self.market_prices[t] for t in self.time_series) * self.step_in_hours, 'Objective Function'
 
-		if a == "A":
-			self.milp += lpSum(p_abs[t] * self.market_prices[t] + k1 * e_deg[t] + k2 * e_deg2[t] for t in self.time_series) * self.step_in_hours, 'Objective Function'
-		else:
+		#if a == "A":
+		#self.milp += lpSum(p_abs[t] * self.market_prices[t] + k1 * e_deg[t] + k2 * e_deg2[t] for t in self.time_series) * self.step_in_hours, 'Objective Function'
+		#else:
 			#if a == "B" :
 		#elif a == "B":
-			self.milp += lpSum(p_abs[t] * self.market_prices[t] + C1 * e_deg[t] + C2 * e_deg2[t] for t in self.time_series) * self.step_in_hours, 'Objective Function'
+		self.milp += lpSum(p_abs[t] * self.market_prices[t] + C1 * e_deg[t] + C2 * e_deg2[t] for t in self.time_series) * self.step_in_hours, 'Objective Function'
 
 		#self.milp += lpSum(p_abs[t] * self.market_prices[t] - p_inj[t] * self.feedin_tariffs[t] for t in self.time_series) * self.step_in_hours, 'Objective Function'
 
@@ -457,7 +457,7 @@ class Optimizer:
 
 		return self.milp
 
-	def generate_outputs(self, a):
+	def generate_outputs(self):
 		"""
 		Function for generating the outputs of optimization, namely the set points for each asset and all relevant
 		variables, and to convert them into JSON format.
@@ -469,7 +469,7 @@ class Optimizer:
 			self.outputs = {}
 		else:
 			self.__get_variables_values()
-			self.__initialize_and_populate_outputs(a)
+			self.__initialize_and_populate_outputs()
 
 		# Generate the outputs JSON file
 		master_path = os.path.abspath(os.path.join(__file__, '..', '..', '..'))
@@ -654,7 +654,7 @@ class Optimizer:
 
 					elif re.search(f'delta_bess_disch2_{s}_', v.name) and self.add_on_inv:
 						self.varis[f'delta_bess_disch2'][s][t] = v.varValue
-	def __initialize_and_populate_outputs(self, a):
+	def __initialize_and_populate_outputs(self):
 		"""
 		Initializes and populates the outputs' structure as a dictionary matching the outputs JSON format.
 		:return: None
@@ -686,11 +686,11 @@ class Optimizer:
 		of = (pcc_absorption * self.market_prices ) * self.step_in_hours
 
 
-		if a == "A":
-			totdeg = k1 * edeg + k2 * edeg2
-		else:
+		#if a == "A":
+		#totdeg = k1 * edeg + k2 * edeg2
+		#else:
 		#elif a == "B":
-			totdeg = C1 * edeg + C2 * edeg2
+		totdeg = C1 * edeg + C2 * edeg2
 		#else:
 			#print("ERRO")
 		tot = of + totdeg
