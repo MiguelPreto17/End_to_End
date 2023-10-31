@@ -8,6 +8,8 @@ from helpers.set_loggers import *
 from settings.general_settings import GeneralSettings
 from time import time
 from fastapi.responses import JSONResponse
+from copy import deepcopy
+from pydantic import BaseModel
 
 app = FastAPI()
 
@@ -42,34 +44,140 @@ bess_asset = {
         'minPDch': GeneralSettings.bess_min_p_disch,
         'minSoc': GeneralSettings.bess_min_soc,
         'reserveSoc': GeneralSettings.bess_reserve_soc,
-        'testData': main.original_test_data,
+        'testData': GeneralSettings.bess_test_data,
         'vNom': GeneralSettings.bess_v_nom,
     }
+
 
 @app.post("/api/objective_function")
 async def objective_function(selected_option: str = Form(...)):
 
     a = selected_option
     print(a)
+    return a
+
+
+"""class DataInput(BaseModel):
+    date: dt.datetime
+    market: float
+    load: float
+"""
 
 @app.post("/api/settings")
-async def settings(input_value: float = Form(...), table_data: list = Form(...)):
+async def settings(date: str = Form(...), market: list = Form(...), load: list = Form(...)):
+    # Converter a string de data em um objeto datetime
 
-    bess_asset['maxSoc'] = input_value
-    bess_asset['actualENom'] = input_value
-    bess_asset['eNom'] = input_value
-    z = table_data
-    step = GeneralSettings.step
-    read_data(table_data, step)
-    print(z)
+    table_data = pd.DataFrame({'date': [date], 'market': [market], 'load': [load]})
+    print(table_data['date'])
+    table_data['date'] = pd.to_datetime(table_data['date'], format='%d/%m/%Y %H:%M', errors='coerce')
+    print (table_data['date'])
+
+    # Defina a coluna de datas como o índice
+    #table_data.set_index('date', inplace=True)
+
+    # Renomeie o índice
+    #table_data.index.rename('datetime', inplace=True)
+    print(table_data)
+    #step = GeneralSettings.step
+    data_df = read_data(table_data)
+
+    # Iterate over each day requested
+    first_day = data_df.index[0]
+    total_iter = len(GeneralSettings.all_days)
+    iteration = 0
+
+    for day in GeneralSettings.all_days:
+        # Log the current iteration
+        iteration += 1
+        iter_time = time()
+        logger.info(f' * Day {iteration} of {total_iter} ... * ')
+
+        # Truncate data to present day
+        first_dt = first_day + dt.timedelta(days=day)
+        last_dt = first_dt + dt.timedelta(hours=GeneralSettings.horizon) - dt.timedelta(minutes=GeneralSettings.step)
+        df = data_df.loc[first_dt:last_dt, :].copy()
+
+        # Updates between runs
+        if iteration == 1:
+            degraded = 0
+            degraded2 = 0
+            init = first_dt
+            soc = GeneralSettings.bess_initial_soc
+            soc2 = GeneralSettings.bess_initial_soc2
+        else:
+            degraded += main.degradation
+            degraded2 += main.degradation2
+            init += dt.timedelta(days=1)
+            main.last_soc /= (GeneralSettings.bess_e_nom - degraded) * 100
+            main.last_soc2 /= (GeneralSettings.bess_e_nom2 - degraded2) * 100
+            soc = main.last_soc
+            soc2 = main.last_soc2
+
+        #before_init = init - dt.timedelta(hours=1)
+
+        settings = {
+            'pccLimitValue': GeneralSettings.pcc_limit_value,
+            'addOnInv': GeneralSettings.add_on_inv,
+            'addOnSoc': GeneralSettings.add_on_soc,
+        }
+
+        original_test_data = deepcopy(GeneralSettings.bess_test_data)
+        original_test_data2 = deepcopy(GeneralSettings.bess_test_data2)
+
+        bess_asset2 = {
+            'actualENom': GeneralSettings.bess_e_nom2 - degraded2,
+            'chEff': GeneralSettings.bess_ch_eff2,
+            'degCurve': GeneralSettings.bess_deg_curve2,
+            'dischEff': GeneralSettings.bess_disch_eff2,
+            'eNom': GeneralSettings.bess_e_nom2,
+            'eolCriterion': GeneralSettings.bess_eol_criterion2,
+            'invMaxIDC': GeneralSettings.bess_inv_max_idc2,
+            'invSNom': GeneralSettings.bess_inv_s_nom2,
+            'invVNom': GeneralSettings.bess_inv_v_nom2,
+            'maxCCh': GeneralSettings.bess_max_c_ch2,
+            'maxCDch': GeneralSettings.bess_max_c_disch2,
+            'maxSoc': GeneralSettings.bess_max_soc2,
+            'minPCh': GeneralSettings.bess_min_p_ch2,
+            'minPDch': GeneralSettings.bess_min_p_disch2,
+            'minSoc': GeneralSettings.bess_min_soc2,
+            'reserveSoc': GeneralSettings.bess_reserve_soc2,
+            'testData': original_test_data2,
+            'vNom': GeneralSettings.bess_v_nom2,
+        }
+
+        milp_params = {
+            'mipgap': GeneralSettings.mipgap,
+            'timeout': GeneralSettings.timeout,
+            'init': init,
+            'horizon': GeneralSettings.horizon,
+            'step': GeneralSettings.step,
+        }
+
+        measures = {
+            'bessSoC': soc,
+        }
+
+        measures2 = {
+            'bessSoC': soc2,
+        }
+
+        forecasts_and_other_arrays = {
+            'pvForecasts': df['pv'].values,
+            'loadForecasts': df['load'].values,
+            'marketPrices': df['market'].values,
+            'feedinTariffs': df['feedin'].values,
+        }
+
+    return data_df
 
 @app.post("/api/teste")
 async def teste(selected_option: str = Form(...), input_value: float = Form(...)):
 
     a = selected_option
     print(a)
-
-
+    bess_asset['maxSoc'] = input_value
+    bess_asset['actualENom'] = input_value
+    bess_asset['eNom'] = input_value
 
     t0 = time()
     prob_obj = optimize(main.settings, bess_asset, main.bess_asset2, main.milp_params, main.measures, main.measures2, main.forecasts_and_other_arrays, a)
@@ -130,15 +238,13 @@ async def teste(selected_option: str = Form(...), input_value: float = Form(...)
                                        sep=';', decimal=',', index=True)
 
     # Remove the log file handler
-    remove_logfile_handler(main.logfile_handler_id)
+    #remove_logfile_handler(main.logfile_handler_id)
 
     # Get the needed outputs
-    print(a)
-    print(main.daily_outputs)
+    #return(a)
+    return (main.daily_outputs)
 
 
 @app.get("/api/get_data_for_chart")
 async def get_data_for_chart():
-    data = list(main.final_outputs)
-    data2 = main.daily_outputs
-    return JSONResponse(content={"data": list(data)})"""
+    return (main.daily_outputs['Merge'], main.final_outputs)

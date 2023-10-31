@@ -11,8 +11,9 @@ from settings.general_settings import GeneralSettings
 from time import time
 
 
-def read_data(table_data, step):
-	"""
+
+"""def read_data(step):
+	
 	Reader and parser for forecasted data:
 	- generation (normalized 0-1),
 	- load (inflexible; normalized 0-1),
@@ -22,17 +23,15 @@ def read_data(table_data, step):
 	:type step: int
 	:return: parsed dataframe with forecasts
 	:rtype: pandas.core.frame.DataFrame
-	"""
+	
 	t = time()
 	logger.info('Reading and parsing forecasts ... ')
 
-	data = pd.DataFrame(table_data)
-
-	"""# Read data in .csv as a dataframe; read index as datetime
+	# Read data in .csv as a dataframe; read index as datetime
 	dateparse = lambda x: dt.datetime.strptime(x, '%d/%m/%Y  %H:%M')
 	data = pd.read_csv('input/input_data.csv', parse_dates=['date'], index_col='date', decimal=',', sep=';',
 	                   date_parser=dateparse)
-	data.index.rename('datetime', inplace=True)"""
+	data.index.rename('datetime', inplace=True)
 
 	# Fix lacking market and feed-in values
 	data['market'].replace(to_replace=0, method='ffill', inplace=True)
@@ -51,6 +50,41 @@ def read_data(table_data, step):
 	data.loc[new_entry_idx, :] = data.loc[data.index[-1]]
 	data = data.resample(f'{step}T').ffill()
 	data = data.iloc[:-1]
+
+	logger.info(f'Reading and parsing forecasts ... OK! ({time()-t:.3f}s)')
+
+	return data"""
+
+
+def read_data(table_data):
+	
+	"""Reader and parser for forecasted data:
+	- generation (normalized 0-1),
+	- load (inflexible; normalized 0-1),
+	- price for energy consumed from the retailer (€/kWh) and
+	- tariff for energy sold to the retailer (€/kWh)
+	:param step: data and forecast step in minutes
+	:type step: int
+	:return: parsed dataframe with forecasts
+	:rtype: pandas.core.frame.DataFrame"""
+
+	t = time()
+	logger.info('Reading and parsing forecasts ... ')
+
+	data = pd.DataFrame(table_data)
+
+	# Fix lacking market and feed-in values
+	data['market'].replace(to_replace=0, method='ffill', inplace=True)
+
+	# Resample data to step
+	# To up-sample (H -> min) a last row must be included with the last index hour + 1
+	# e.g. when upsampling from [01/01/2022 00:00, 01/01/2022 23:00] to a 15' step, [02/01/2022 00:00]
+	# must be added so that the resample does not end at [01/01/2022 23:00] but at [01/01/2022 23:45]
+	"""idx_freq = pd.infer_freq(data.index)
+	new_entry_idx = data.index[-1] + pd.Timedelta(1, unit=idx_freq)
+	data.loc[new_entry_idx, :] = data.loc[data.index[-1]]
+	data = data.resample(f'{step}T').ffill()
+	data = data.iloc[:-1]"""
 
 	logger.info(f'Reading and parsing forecasts ... OK! ({time()-t:.3f}s)')
 
@@ -97,13 +131,13 @@ HELPERS_PATH = os.path.join(ROOT_PATH, 'helpers')
 set_stdout_logger()
 logfile_handler_id = set_logfile_handler()
 
-# Read and scale data
+"""# Read and scale data
 data_df = read_data(GeneralSettings.step)
 
 # Iterate over each day requested
 first_day = data_df.index[0]
 total_iter = len(GeneralSettings.all_days)
-iteration = 0
+iteration = 0"""
 
 # Create a variable to store the setpoints
 daily_outputs = None
@@ -121,7 +155,7 @@ total = 0
 first_dt_text = 0
 
 
-for day in GeneralSettings.all_days:
+"""for day in GeneralSettings.all_days:
 	# Log the current iteration
 	iteration += 1
 	iter_time = time()
@@ -148,9 +182,9 @@ for day in GeneralSettings.all_days:
 		soc = last_soc
 		soc2 = last_soc2
 
-	before_init = init - dt.timedelta(hours=1)
+	before_init = init - dt.timedelta(hours=1)"""
 
-	# Preparing inputs for optimization (format is API-friendly)
+"""# Preparing inputs for optimization (format is API-friendly)
 	settings = {
 		'pccLimitValue': GeneralSettings.pcc_limit_value,
 		'addOnInv': GeneralSettings.add_on_inv,
@@ -182,8 +216,6 @@ for day in GeneralSettings.all_days:
 		'vNom': GeneralSettings.bess_v_nom2,
 	}
 
-
-
 	milp_params = {
 		'mipgap': GeneralSettings.mipgap,
 		'timeout': GeneralSettings.timeout,
@@ -205,20 +237,20 @@ for day in GeneralSettings.all_days:
 		'loadForecasts': df['load'].values,
 		'marketPrices': df['market'].values,
 		'feedinTariffs': df['feedin'].values,
-	}
+	}"""
 
 
-	# Create a final outputs JSON (for future API purposes)
-	final_outputs = {
-		'datetime': [],
-		'status': [],
-		'status_real': [],
-		'expected_revenues': [],
-		'degradation': [],
-		'degradation2': [],
-		'total_degradation': [],
-		'total': [],
-		'last_soc': [],
-		'time': [],
-	}
+# Create a final outputs JSON (for future API purposes)
+final_outputs = {
+	'datetime': [],
+	'status': [],
+	'status_real': [],
+	'expected_revenues': [],
+	'degradation': [],
+	'degradation2': [],
+	'total_degradation': [],
+	'total': [],
+	'last_soc': [],
+	'time': [],
+}
 
