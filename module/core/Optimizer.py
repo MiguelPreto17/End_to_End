@@ -256,17 +256,13 @@ class Optimizer:
 		#        OBJECTIVE FUNCTION
 		# **************************************************************************************************************
 		# Eq. (1)
-		#self.milp += lpSum(p_abs[t] * self.market_prices[t] + e_deg[t] + e_deg2[t] for t in self.time_series) * self.step_in_hours, 'Objective Function'
-		#self.milp += lpSum(p_abs[t] * self.market_prices[t] for t in self.time_series) * self.step_in_hours, 'Objective Function'
 
 		#if a == "A":
-		#self.milp += lpSum(p_abs[t] * self.market_prices[t] + k1 * e_deg[t] + k2 * e_deg2[t] for t in self.time_series) * self.step_in_hours, 'Objective Function'
+		self.milp += lpSum(p_abs[t] * self.market_prices[t] + k1 * e_deg[t] + k2 * e_deg2[t] for t in self.time_series) * self.step_in_hours, 'Objective Function'
 		#else:
 			#if a == "B" :
 		#elif a == "B":
-		self.milp += lpSum(p_abs[t] * self.market_prices[t] + C1 * e_deg[t] + C2 * e_deg2[t] for t in self.time_series) * self.step_in_hours, 'Objective Function'
-
-		#self.milp += lpSum(p_abs[t] * self.market_prices[t] - p_inj[t] * self.feedin_tariffs[t] for t in self.time_series) * self.step_in_hours, 'Objective Function'
+		#self.milp += lpSum(p_abs[t] * self.market_prices[t] + C1 * e_deg[t] + C2 * e_deg2[t] for t in self.time_series) * self.step_in_hours, 'Objective Function'
 
 		# **************************************************************************************************************
 		#           CONSTRAINTS
@@ -289,10 +285,6 @@ class Optimizer:
 			# Eq. (3)
 			self.milp += p_abs[t] <= self.pcc_limit_value * delta_pcc[t], f'PCC_abs_limit_{t:03d}'
 
-			# Eq. (4)
-			#self.milp += p_inj[t] <= self.pcc_limit_value * (1 - delta_pcc[t]), f'PCC_inj_limit_{t:03d}'
-			#self.milp += p_inj[t] <= self.pcc_limit_value * (1 - delta_pcc[t]), f'PCC_inj_limit_{t:03d}'
-
 			if not self.add_on_inv:
 				# Define variables for charging and discharging at DC-side
 				bes_charge = p_ch[t] * self.bess.const_eff_ch
@@ -305,8 +297,6 @@ class Optimizer:
 				             f'Max_AC_charge_rate_{t:03d}'
 				self.milp += p_ch2[t] <= self.bess2.p_ac_max_c * delta_bess2[t], \
 							 f'Max_AC_charge2_rate_{t:03d}'
-			#self.milp += p_ch[t] <= self.bess.p_dc_max_c * delta_bess[t], f'Max_DC_charge_rate_{t:03d}'
-			#self.milp += p_ch2[t] <= self.bess2.p_dc_max_c * delta_bess[t], f'Max_DC_charge2_rate_{t:03d}'
 
 
 			# Eq. (6)
@@ -393,8 +383,6 @@ class Optimizer:
 			self.milp += bes_discharge <= self.bess.p_dc_max_d, f'Max_DC_discharge_rate_{t:03d}'
 			self.milp += bes_discharge2 <= self.bess2.p_dc_max_d, f'Max_DC_discharge2_rate_{t:03d}'
 
-			#self.milp += p_disch[t] <= self.bess.p_dc_max_d * (1 - delta_bess[t]), f'Max_DC_discharge_rate_{t:03d}'
-			#self.milp += p_disch2[t] <= self.bess2.p_dc_max_d * (1 - delta_bess[t]), f'Max_DC_discharge2_rate_{t:03d}'
 
 			# Update to BESS energy content
 			e_bess_update = (bes_charge - bes_discharge) * self.step_in_hours
@@ -687,10 +675,10 @@ class Optimizer:
 
 
 		#if a == "A":
-		#totdeg = k1 * edeg + k2 * edeg2
+		totdeg = k1 * edeg + k2 * edeg2
 		#else:
 		#elif a == "B":
-		totdeg = C1 * edeg + C2 * edeg2
+		#totdeg = C1 * edeg + C2 * edeg2
 		#else:
 			#print("ERRO")
 		tot = of + totdeg
