@@ -1,0 +1,2 @@
+;datetime;status;status_real;expected_revenues;degradation;degradation2;total_degradation;total;last_soc;time
+0;2024-01-30 23:00:00;Optimal;Optimal;112865,44326656;0,00787078435;0,0006191397;4,487524143;112869,930790703;0,0;0,2404470443725586
