@@ -15,7 +15,7 @@ import random
 class GeneralSettings:
     add_on_inv = False
     add_on_soc = False
-    all_days = range(0,31)
+    all_days = range(0,1)
     plot = False
 
     # milp_params

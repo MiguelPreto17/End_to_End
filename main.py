@@ -9,7 +9,18 @@ from helpers.set_loggers import *
 from module.core.Optimizer import Optimizer
 from settings.general_settings import GeneralSettings
 from time import time
+from API_Inputs.dayahead_prices import extract_prices
+from API_Inputs.emissions import extract_co2_forecast
+from API_Inputs.Forecast import extract_values_from_url
+from API_Inputs.Final_file import final_file
+import datetime
+from database import upload_files
+from Parametrs import parameters
 
+#url = 'https://web-api.tp.entsoe.eu/api?securityToken=efb2ca19-add3-42d4-84e6-8e83986591e3&documentType=A44&in_Domain=10YPT-REN------W&out_Domain=10YPT-REN------W&periodStart=202308010000&periodEnd=202308300000'
+#URL = "http://10.61.6.197:8083/view/Forecast%20Values%202023-11-30_00-00-00Z.txt"
+
+parameters()
 
 def read_data(step):
 	"""
@@ -27,13 +38,14 @@ def read_data(step):
 	logger.info('Reading and parsing forecasts ... ')
 
 	# Read data in .csv as a dataframe; read index as datetime
-	dateparse = lambda x: dt.datetime.strptime(x, '%d/%m/%Y  %H:%M')
-	data = pd.read_csv('input/input_data.csv', parse_dates=['date'], index_col='date', decimal=',', sep=';',
+	#dateparse = lambda x: dt.datetime.strptime(x, '%d/%m/%Y  %H:%M:%S')
+	dateparse = lambda x: dt.datetime.strptime(x, '%Y-%m-%d %H:%M:%S')  # Adapte o formato conforme necessário
+	data = pd.read_csv('arquivo_final.csv', parse_dates=['date'], index_col='date', decimal=',', sep=';',
 	                   date_parser=dateparse)
 	data.index.rename('datetime', inplace=True)
 
 	# Fix lacking market and feed-in values
-	data['market'].replace(to_replace=0, method='ffill', inplace=True)
+	#data['market'].replace(to_replace=0, method='ffill', inplace=True)
 	data['feedin'].replace(to_replace=0, method='ffill', inplace=True)
 
 	# Scale data by nominal values of the configured assets
@@ -99,9 +111,22 @@ if __name__ == '__main__':
 
 	# Read and scale data
 	data_df = read_data(GeneralSettings.step)
+	print(data_df)
+	print(type(data_df))
+	data_df["market"] = data_df["market"].astype(float)
+	print(data_df["market"].dtype)
+	print(data_df["load"].dtype)
+
+	non_numeric_values = data_df.loc[pd.to_numeric(data_df['market'], errors='coerce').isna(), 'market']
+
+	if not non_numeric_values.empty:
+		print(f"Os seguintes valores não são numéricos na coluna 'market':\n{non_numeric_values}")
+	else:
+		print("Todos os valores na coluna 'market' são numéricos.")
 
 	# Iterate over each day requested
 	first_day = data_df.index[0]
+	print(first_day)
 	total_iter = len(GeneralSettings.all_days)
 	iteration = 0
 
@@ -139,6 +164,8 @@ if __name__ == '__main__':
 		logger.info(f' * Day {iteration} of {total_iter} ... * ')
 
 		# Truncate data to present day
+		print(type(first_day))
+		print(type(dt.timedelta(days=day)))
 		first_dt = first_day + dt.timedelta(days=day)
 		last_dt = first_dt + dt.timedelta(hours=GeneralSettings.horizon) - dt.timedelta(minutes=GeneralSettings.step)
 		df = data_df.loc[first_dt:last_dt, :].copy()
@@ -238,6 +265,7 @@ if __name__ == '__main__':
 			'feedinTariffs': df['feedin'].values,
 		}
 
+
 		# Run optimization
 		t0 = time()
 		prob_obj = optimize(settings, bess_asset, bess_asset2, milp_params, measures, measures2, forecasts_and_other_arrays)
@@ -315,6 +343,9 @@ if __name__ == '__main__':
 	                     sep=';', decimal=',', index=True)
 	pd.DataFrame(final_outputs).to_csv(rf'outputs/{prob_obj.common_fname}_main_outputs.csv',
 	                                   sep=';', decimal=',', index=True)
+
+	directory_path = r"C:\Users\miguel.preto\PycharmProjects\InterStore\outputs"  # Update this path as needed
+	upload_files(directory_path)
 
 	# Remove the log file handler
 	remove_logfile_handler(logfile_handler_id)

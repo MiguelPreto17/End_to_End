@@ -255,7 +255,6 @@ class Optimizer:
 		# **************************************************************************************************************
 		#        OBJECTIVE FUNCTION
 		# **************************************************************************************************************
-		# Eq. (1)
 
 		#if a == "A":
 		self.milp += lpSum(p_abs[t] * self.market_prices[t] + k1 * e_deg[t] + k2 * e_deg2[t] for t in self.time_series) * self.step_in_hours, 'Objective Function'
@@ -280,7 +279,6 @@ class Optimizer:
 			#  -- define the liquid consumption as load - generation (without bess flows)
 			generation_and_demand = (self.load_forecasts[t] - self.pv_forecasts[t])
 			self.milp += p_abs[t] == bess_flows + bess_flows2 + generation_and_demand, f'Equilibrium_{t:03d}'
-			#self.milp += p_abs[t] - p_inj[t] == bess_flows + bess_flows2 + generation_and_demand, f'Equilibrium_{t:03d}'
 
 			# Eq. (3)
 			self.milp += p_abs[t] <= self.pcc_limit_value * delta_pcc[t], f'PCC_abs_limit_{t:03d}'
