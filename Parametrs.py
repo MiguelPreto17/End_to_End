@@ -8,7 +8,6 @@ def parameters():
 
     # Escolha da Objective_Function
     Objective_Function = "Cost"
-    Objective_Function2 = "b"
 
 
 
@@ -45,4 +44,4 @@ def parameters():
     extract_co2_forecast(params)
     extract_values_from_url(values_url)
     final_file(Objective_Function)
-    final_file(Objective_Function2)
+
