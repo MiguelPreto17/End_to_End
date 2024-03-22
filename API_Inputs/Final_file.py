@@ -38,7 +38,7 @@ def final_file(Objective_function):
         df_final["market"] = df2["Value"]  # Coluna Price de df1
         df_final["pv"] = 0
         df_final["feedin"] = 0
-        df_final["load"] = 25
+        df_final["load"] = df3["Load"]
 
     df_final['market'] = df_final['market'].replace('[^\d.,]', '', regex=True)
 
@@ -49,7 +49,7 @@ def final_file(Objective_function):
     # Selecionando as primeiras 24 linhas do DataFrame df_final
     df_primeiras_24 = df_final.iloc[:24, :]
 
-    # Salvar o dataframe em um novo arquivo CSV
+   # Salvar o dataframe em um novo arquivo CSV
     df_primeiras_24.to_csv("arquivo_final.csv", index=False, sep=";")
     print("Arquivos unidos com sucesso!")
     print(df_primeiras_24)

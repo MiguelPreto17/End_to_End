@@ -1,24 +1,12 @@
 import datetime as dt
-import itertools
-import numpy as np
-import os
 import pandas as pd
-import sys
 from copy import deepcopy
 from helpers.set_loggers import *
 from module.core.Optimizer import Optimizer
 from settings.general_settings import GeneralSettings
 from time import time
-from API_Inputs.dayahead_prices import extract_prices
-from API_Inputs.emissions import extract_co2_forecast
-from API_Inputs.Forecast import extract_values_from_url
-from API_Inputs.Final_file import final_file
-import datetime
-from database import upload_files
+from database import upload_latest_file
 from Parametrs import parameters
-
-#url = 'https://web-api.tp.entsoe.eu/api?securityToken=efb2ca19-add3-42d4-84e6-8e83986591e3&documentType=A44&in_Domain=10YPT-REN------W&out_Domain=10YPT-REN------W&periodStart=202308010000&periodEnd=202308300000'
-#URL = "http://10.61.6.197:8083/view/Forecast%20Values%202023-11-30_00-00-00Z.txt"
 
 parameters()
 
@@ -134,19 +122,6 @@ if __name__ == '__main__':
 	daily_outputs = None
 	# Create a variable to store the main results
 	final_outputs = None
-
-
-
-	"""final_outputs ={
-		'datetime': [],
-		'status': [],
-		'status_real': [],
-		'expected_revenues': [],
-		'degradation': [],
-		'degradation2': [],
-		'last_soc': [],
-		'time': [],
-	}"""
 
 	expected_revenues = 0
 	last_soc = 0
@@ -294,7 +269,7 @@ if __name__ == '__main__':
 		logger.warning(f'{status}')
 
 
-		expected_revenues += pd.DataFrame(outputs.get('expectRevs')).sum().get('setpoint')
+		expected_revenues += pd.DataFrame(outputs.get('expectEnergy_cost')).sum().get('setpoint')
 		last_soc += pd.DataFrame(outputs['eBess']).loc[prob_obj.time_intervals-1, 'setpoint']
 		last_soc2 += pd.DataFrame(outputs['eBess2']).loc[prob_obj.time_intervals - 1, 'setpoint']
 		degradation += pd.DataFrame(outputs['eDeg']).sum().get('setpoint')
@@ -317,11 +292,11 @@ if __name__ == '__main__':
 			'datetime': [],
 			'status': [],
 			'status_real': [],
-			'expected_revenues': [],
-			'degradation': [],
-			'degradation2': [],
-			'total_degradation': [],
-			'total': [],
+			'Energy_cost': [],
+			'degr_Battery1': [],
+			'degr_Battery2': [],
+			'Degradation_cost': [],
+			'total_cost': [],
 			'last_soc': [],
 			'time': [],
 		}
@@ -329,11 +304,11 @@ if __name__ == '__main__':
 		final_outputs['datetime'].append(first_dt_text)
 		final_outputs['status'].append(status)
 		final_outputs['status_real'].append(status_real)
-		final_outputs['expected_revenues'].append(expected_revenues)
-		final_outputs['degradation'].append(degradation)
-		final_outputs['degradation2'].append(degradation2)
-		final_outputs['total_degradation'].append(total_degradation)
-		final_outputs['total'].append(total)
+		final_outputs['Energy_cost'].append(expected_revenues)
+		final_outputs['degr_Battery1'].append(degradation)
+		final_outputs['degr_Battery2'].append(degradation2)
+		final_outputs['Degradation_cost'].append(total_degradation)
+		final_outputs['total_cost'].append(total)
 		final_outputs['last_soc'].append(last_soc)
 		final_outputs['time'].append(t1)
 
@@ -344,8 +319,9 @@ if __name__ == '__main__':
 	pd.DataFrame(final_outputs).to_csv(rf'outputs/{prob_obj.common_fname}_main_outputs.csv',
 	                                   sep=';', decimal=',', index=True)
 
-	directory_path = r"C:\Users\miguel.preto\PycharmProjects\InterStore\outputs"  # Update this path as needed
-	upload_files(directory_path)
+	#directory_path = r"C:\Users\miguel.preto\PycharmProjects\Inputs\outputs"  # Update this path as needed
+	directory_path = "/code/outputs"
+	upload_latest_file(directory_path)
 
 	# Remove the log file handler
 	remove_logfile_handler(logfile_handler_id)

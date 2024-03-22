@@ -4,22 +4,6 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 import pandas as pd
 
-url2 = 'https://web-api.tp.entsoe.eu/api?securityToken=efb2ca19-add3-42d4-84e6-8e83986591e3&documentType=A44&in_Domain=10YPT-REN------W&out_Domain=10YPT-REN------W&periodStart=202308010000&periodEnd=202308300000'
-
-current_date_obj = datetime.now()
-#current_date2 = current_date_obj.replace(hour=0, minute=0, second=0).strftime("%Y%m%d%H%M%S")
-current_date2 = (current_date_obj + timedelta(days=1)).replace(hour=0, minute=0, second=0).strftime("%Y%m%d%H%M%S")
-current_date21 = (current_date_obj + timedelta(days=1)).replace(hour=23, minute=0, second=0).strftime("%Y%m%d%H%M%S")
-
-# Mantendo apenas os últimos 4 dígitos na parte dos segundos
-current_date2 = current_date2[:-2]  # Remover os últimos 4 dígitos
-current_date21 = current_date21[:-2]  # Remover os últimos 4 dígitos
-url = f"https://web-api.tp.entsoe.eu/api?securityToken=efb2ca19-add3-42d4-84e6-8e83986591e3&documentType=A44&in_Domain=10YPT-REN------W&out_Domain=10YPT-REN------W&periodStart={current_date2}&periodEnd={current_date21}"
-
-print(current_date2)
-print(url)
-print(url2)
-
 def extract_prices(url):
 
     # Realizar a solicitação GET
@@ -30,16 +14,13 @@ def extract_prices(url):
     if response.status_code == 200:
        # Parsear o XML
         root = ET.fromstring(response.content)
-        """print(response.content)"""
 
       #Extrair os dados relevantes do XML
         data = {
             'date': [],
-            #'EndTime': [],
             'Price': []
         }
 
-        #base_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         base_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
 
         current_time = base_date
@@ -69,4 +50,3 @@ def extract_prices(url):
         # Lidar com erros de solicitação, se necessário
         print('Erro na solicitação:', response.status_code)
 
-extract_prices(url)

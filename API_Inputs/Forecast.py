@@ -1,26 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
-from io import StringIO
-from datetime import datetime, timedelta
-
-
-"""#url = "http://10.61.6.197:8083/view/Forecast%20Values%202023-11-30_00-00-00Z.txt"
-current_date = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S%Z")
-current_date2 = current_date.replace(hour=0, minute=0, second=0, microsecond=0).strftime("%Y-%m-%d-%H-%M-%SZ")
-values_url = f"http://10.61.6.197:8083/view/Forecast%20Values_{current_date2}.txt"
-print(current_date)
-print(current_date2)"""
-
-#current_date = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S%Z")
-current_date_obj = datetime.now()
-current_date2 = current_date_obj.replace(hour=0, minute=0, second=0, microsecond=0).strftime("20%Y-%m-%d_%H-%M-%SZ")
-current_date21 = (current_date_obj + timedelta(days=1)).replace(hour=0, minute=0, second=0).strftime("20%Y-%m-%d_%H-%M-%SZ")
-values_url = f"http://10.61.6.197:8083/view/Forecast%20Values%{current_date21}.txt"
-
-#print(current_date)
-print(current_date21)
-print(values_url)
 
 def extract_values_from_html(html_content):
     soup = BeautifulSoup(html_content, 'html.parser')
@@ -36,7 +16,6 @@ def extract_values_from_html(html_content):
         values.append(row_data)
 
     return values
-
 
 def extract_values_from_url(url):
     try:
@@ -60,5 +39,4 @@ def extract_values_from_url(url):
         return None
 
 
-extract_values_from_url(values_url)
 
