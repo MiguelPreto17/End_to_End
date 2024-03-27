@@ -682,6 +682,7 @@ class Optimizer:
 		tot = of + totdeg
 		#merge = p_ch - p_disch
 		merge = np.array(self.varis.get('p_ch')) - np.array(self.varis.get('p_disch'))
+		merge2 = np.array(self.varis.get('p_ch2')) - np.array(self.varis.get('p_disch2'))
 
 
 		#of = (pcc_absorption * self.market_prices - pcc_injection * self.feedin_tariffs) * self.step_in_hours
@@ -689,24 +690,25 @@ class Optimizer:
 		#Initialize outputs as a dictionary
 		self.outputs = dict(
 			milpStatus=self.milp.status,
-			pCharge=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, p_ch)],
-			pDischarge=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, p_disch)],
-			eBess=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, self.varis.get('e_bess'))],
-			eDeg=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, self.varis.get('e_deg'))],
-			pCharge2=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, p_ch2)],
-			pDischarge2=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, p_disch2)],
-			eBess2=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, self.varis.get('e_bess2'))],
-			eDeg2=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, self.varis.get('e_deg2'))],
-			pAbs=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, self.varis.get('p_abs'))],
+			pCharge_kW=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, p_ch)],
+			pDischarge_kW=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, p_disch)],
+			energy_battery_kWh=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, self.varis.get('e_bess'))],
+			energy_Deg_kWh=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, self.varis.get('e_deg'))],
+			pCharge_battery2_kW=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, p_ch2)],
+			pDischarge_battery2_kW=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, p_disch2)],
+			energy_battery2_kWh=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, self.varis.get('e_bess2'))],
+			energy_Deg2_kWh=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, self.varis.get('e_deg2'))],
+			#pTotal=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, merge)],
+			#pTotal2=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, merge2)],
+			p_from_Grid_kW=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, self.varis.get('p_abs'))],
 			#pInj=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, self.varis.get('p_inj'))],
 			#expectRevs=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, of)],
 			expectEnergy_cost=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, of)],
-			Totaldeg=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, totdeg)],
-			Total=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, tot)],
-			Merge=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, merge)],
-
-
+			expect_Deg_cost=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, totdeg)],
+			Total_cost=[{'datetime': dt, 'setpoint': val} for dt, val in zip(list_of_dates, tot)],
 		)
+
+
 
 	@staticmethod
 	def final_folder_cleaning():

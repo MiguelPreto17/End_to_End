@@ -7,6 +7,14 @@ def final_file(Objective_function):
     df2 = pd.read_csv("output_data.csv", sep=";")
     df3 = pd.read_csv("forecast_data.csv", sep=";" )
 
+    # Converter a coluna 'date' para o tipo datetime
+    df1['date'] = pd.to_datetime(df1['date'])
+
+    # Adicionar uma hora à coluna de datas para começar na 00:00
+    start_date = pd.to_datetime(df1['date'].iloc[0]) + pd.DateOffset(hours=1)  # Adiciona uma hora ao primeiro timestamp
+    df1['date'] = pd.date_range(start=start_date, periods=len(df1), freq='H')  # Começa na meia-noite
+    print(df1)
+
     # Removendo "kW" da coluna
     df3['Load'] = df3['Load'].str.replace(' kW', '')
 
@@ -26,9 +34,10 @@ def final_file(Objective_function):
 
     # Preencher as colunas do novo DataFrame com os dados dos DataFrames originais
 
+
     if Objective_function == "Cost":
         df_final["date"] = df1["date"]  # Coluna DateTime de df1
-        df_final["market"] = df1["Price"]  # Coluna Price de df1
+        df_final["market"] = df1["Price"] / 1000 # Coluna Price de df1
         df_final["pv"] = 0
         df_final["feedin"] = 0
         df_final["load"] = df3["Load"]
@@ -53,3 +62,6 @@ def final_file(Objective_function):
     df_primeiras_24.to_csv("arquivo_final.csv", index=False, sep=";")
     print("Arquivos unidos com sucesso!")
     print(df_primeiras_24)
+
+
+

@@ -5,10 +5,53 @@ from helpers.set_loggers import *
 from module.core.Optimizer import Optimizer
 from settings.general_settings import GeneralSettings
 from time import time
-from database import upload_latest_file
-from Parametrs import parameters
+from database import upload_latest_files
+import datetime
+from API_Inputs.dayahead_prices import extract_prices
+from API_Inputs.emissions import extract_co2_forecast
+from API_Inputs.Forecast import extract_values_from_url
+from API_Inputs.Final_file import final_file
+import sys
 
-parameters()
+def parameters(objective_function):
+
+    # Escolha da Objective_Function
+    Objective_Function = objective_function
+
+    # Data atual
+    current_date_obj = datetime.datetime.now()
+
+    # Datas para input precos
+    initial_date = (current_date_obj + datetime.timedelta(days=1)).replace(hour=0, minute=0, second=0).strftime("%Y%m%d%H%M%S")
+    final_date = (current_date_obj + datetime.timedelta(days=2)).replace(hour=0, minute=0, second=0).strftime( "%Y%m%d%H%M%S")
+    # Mantendo apenas os últimos 4 dígitos na parte dos segundos
+    initial_date = initial_date[:-2]  # Remover os últimos 4 dígitos
+    final_date = final_date[:-2]  # Remover os últimos 4 dígitos
+    url = f"https://web-api.tp.entsoe.eu/api?securityToken=efb2ca19-add3-42d4-84e6-8e83986591e3&documentType=A44&in_Domain=10YPT-REN------W&out_Domain=10YPT-REN------W&periodStart={initial_date}&periodEnd={final_date}"
+
+    # Datas para input C02
+    date = (current_date_obj + datetime.timedelta(days=1)).replace(hour=0, minute=0, second=0).strftime("20%Y-%m-%d_%H-%M-%SZ")
+    values_url = f"http://10.61.6.197:8083/view/Forecast%20Values%{date}.txt"
+
+    # Datas para input Load
+    startdate = (current_date_obj + datetime.timedelta(days=1)).replace(hour=0, minute=0, second=0).strftime("%Y-%m-%dT%H:%M:%SZ")
+    enddate = (current_date_obj + datetime.timedelta(days=1)).replace(hour=23, minute=0, second=0).strftime("%Y-%m-%dT%H:%M:%SZ")
+    print(startdate, enddate)
+
+    params = {
+            'geo_id': '1',
+            'keep_oldest_only': 'true',
+            'remove_duplicates': 'true',
+            'start_date': startdate,
+            'end_date': enddate,
+            'format': 'json',
+        }
+
+    extract_prices(url)
+    extract_co2_forecast(params)
+    extract_values_from_url(values_url)
+    final_file(Objective_Function)
+
 
 def read_data(step):
 	"""
@@ -96,6 +139,11 @@ if __name__ == '__main__':
 	# Set loggers
 	set_stdout_logger()
 	logfile_handler_id = set_logfile_handler()
+
+	# Obtenha o argumento passado na linha de comando
+	objective_function = sys.argv[1]
+	print(objective_function)
+	parameters(objective_function)
 
 	# Read and scale data
 	data_df = read_data(GeneralSettings.step)
@@ -251,6 +299,7 @@ if __name__ == '__main__':
 
 		outputs.pop('milpStatus')
 
+
 		# -- get a single dataframe from all outputs
 		col_names = outputs.keys()
 		for i, col in enumerate(col_names):
@@ -270,13 +319,17 @@ if __name__ == '__main__':
 
 
 		expected_revenues += pd.DataFrame(outputs.get('expectEnergy_cost')).sum().get('setpoint')
-		last_soc += pd.DataFrame(outputs['eBess']).loc[prob_obj.time_intervals-1, 'setpoint']
-		last_soc2 += pd.DataFrame(outputs['eBess2']).loc[prob_obj.time_intervals - 1, 'setpoint']
-		degradation += pd.DataFrame(outputs['eDeg']).sum().get('setpoint')
-		degradation2 += pd.DataFrame(outputs['eDeg2']).sum().get('setpoint')
-		total_degradation += pd.DataFrame(outputs.get('Totaldeg')).sum().get('setpoint')
-		total += pd.DataFrame(outputs.get('Total')).sum().get('setpoint')
+		last_soc += pd.DataFrame(outputs['energy_battery_kWh']).loc[prob_obj.time_intervals-1, 'setpoint']
+		last_soc2 += pd.DataFrame(outputs['energy_battery2_kWh']).loc[prob_obj.time_intervals - 1, 'setpoint']
+		degradation += pd.DataFrame(outputs['energy_Deg_kWh']).sum().get('setpoint')
+		degradation2 += pd.DataFrame(outputs['energy_Deg2_kWh']).sum().get('setpoint')
+		total_degradation += pd.DataFrame(outputs.get('expect_Deg_cost')).sum().get('setpoint')
+		total += pd.DataFrame(outputs.get('Total_cost')).sum().get('setpoint')
 		first_dt_text = dt.datetime.strftime(first_dt, '%Y-%m-%d %H:%M:%S')
+
+		daily_outputs.pop('expectEnergy_cost')
+		daily_outputs.pop('expect_Deg_cost')
+		daily_outputs.pop('Total_cost')
 
 
 
@@ -292,11 +345,11 @@ if __name__ == '__main__':
 			'datetime': [],
 			'status': [],
 			'status_real': [],
-			'Energy_cost': [],
-			'degr_Battery1': [],
-			'degr_Battery2': [],
-			'Degradation_cost': [],
-			'total_cost': [],
+			'Energy_cost_EUR': [],
+			'degr_Battery1_kWh': [],
+			'degr_Battery2_kWh': [],
+			'Degradation_cost_EUR': [],
+			'Total_cost_EUR': [],
 			'last_soc': [],
 			'time': [],
 		}
@@ -304,11 +357,11 @@ if __name__ == '__main__':
 		final_outputs['datetime'].append(first_dt_text)
 		final_outputs['status'].append(status)
 		final_outputs['status_real'].append(status_real)
-		final_outputs['Energy_cost'].append(expected_revenues)
-		final_outputs['degr_Battery1'].append(degradation)
-		final_outputs['degr_Battery2'].append(degradation2)
-		final_outputs['Degradation_cost'].append(total_degradation)
-		final_outputs['total_cost'].append(total)
+		final_outputs['Energy_cost_EUR'].append(expected_revenues)
+		final_outputs['degr_Battery1_kWh'].append(degradation)
+		final_outputs['degr_Battery2_kWh'].append(degradation2)
+		final_outputs['Degradation_cost_EUR'].append(total_degradation)
+		final_outputs['Total_cost_EUR'].append(total)
 		final_outputs['last_soc'].append(last_soc)
 		final_outputs['time'].append(t1)
 
@@ -321,7 +374,7 @@ if __name__ == '__main__':
 
 	#directory_path = r"C:\Users\miguel.preto\PycharmProjects\Inputs\outputs"  # Update this path as needed
 	directory_path = "/code/outputs"
-	upload_latest_file(directory_path)
+	upload_latest_files(directory_path)
 
 	# Remove the log file handler
 	remove_logfile_handler(logfile_handler_id)

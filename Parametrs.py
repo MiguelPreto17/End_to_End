@@ -7,9 +7,7 @@ from API_Inputs.Final_file import final_file
 def parameters():
 
     # Escolha da Objective_Function
-    Objective_Function = "Cost"
-
-
+    Objective_Function = 'Cost'
 
     # Data atual
     current_date_obj = datetime.datetime.now()
