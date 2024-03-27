@@ -1,5 +1,64 @@
 # InterStore
 
+## Guia de Utilização do Docker
+
+Este é um guia básico para utilizar o Docker.
+
+## Instalação do Docker
+
+Para instalar o Docker, siga as instruções disponíveis em [Docker Documentation](https://docs.docker.com/get-docker/).
+
+## Construção da Imagem Docker
+
+Para construir a imagem Docker, siga estes passos:
+
+1. Certifique-se de ter um arquivo Dockerfile no diretório raiz do seu projeto.
+2. Execute o seguinte comando no terminal para construir a imagem Docker:
+
+- `docker build -t <nome_da_imagem> .`
+
+Substitua `<nome_da_imagem>` pelo nome desejado para a sua imagem Docker.
+
+## Construção de Volumes
+
+Você pode criar volumes no Docker utlizando os seguintes comandos:
+
+- `docker volume create <nome_do_volume>`: Cria um novo volume.
+- `docker volume ls`: Lista todos os volumes disponíveis.
+- `docker volume inspect <nome_do_volume>`: Exibe informações detalhadas sobre um volume específico.
+
+
+## Execução do Contêiner
+
+Para executar o contêiner Docker com a sua aplicação, siga estes passos:
+
+1. Execute o seguinte comando no terminal:
+
+- `docker run <nome_da_imagem> python main.py <parâmetros>`: corre o container sem volume
+- `docker run -v <nome_do_volume>:<caminho_no_contêiner> <nome_da_imagem> python main.py <parâmetros>`: corre o container com volume 
+
+## Execução do cron job
+
+Para criar um cron job para executar os comandos Docker em intervalos específicos, você pode usar o cron do sistema operacional onde o Docker está sendo executado. Aqui estão os passos básicos para criar um cron job:
+
+- `crontab -e`
+- `* * * * * docker run -v <nome_do_volume>:<caminho_no_contêiner> <nome_da_imagem> python main.py <parâmetros>a`
+
+Onde:
+
+Os cinco asteriscos representam a programação do cron job (minuto, hora, dia do mês, mês, dia da semana). Por exemplo, * * * * * significa "executar a cada minuto".
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 ## Getting started
