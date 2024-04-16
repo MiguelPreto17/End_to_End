@@ -37,6 +37,12 @@ Para executar o contêiner Docker com a sua aplicação, siga estes passos:
 - `docker run <nome_da_imagem> python main.py <parâmetros>`: corre o container sem volume
 - `docker run -v <nome_do_volume>:<caminho_no_contêiner> <nome_da_imagem> python main.py <parâmetros>`: corre o container com volume 
 
+- `docker run <nome_da_imagem> python main.py Cost 140 0 0.785714 0 1 2`
+- `docker run <nome_da_imagem> python main.py Cost 100 40 1 0.25 1 2`
+- 
+- `docker run <nome_da_imagem> python main.py Emissions 140 0 0.785714 0 1 2`
+- `docker run <nome_da_imagem> python main.py Emissions 100 40 1 0.25 1 2`
+
 ## Execução do cron job
 
 Para criar um cron job para executar os comandos Docker em intervalos específicos, você pode usar o cron do sistema operacional onde o Docker está sendo executado. Aqui estão os passos básicos para criar um cron job:

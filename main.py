@@ -13,6 +13,7 @@ from API_Inputs.Forecast import extract_values_from_url
 from API_Inputs.Final_file import final_file
 import sys
 
+
 def parameters(objective_function):
 
     # Escolha da Objective_Function
@@ -97,8 +98,7 @@ def read_data(step):
 
 	return data
 
-
-def optimize(_settings, _assets, _assets2, _milp_params, _measures, _measures2, _forecasts):
+def optimize(_settings, _assets, _assets2, _milp_params, _measures, _measures2, _forecasts, a):
 	"""
 	Main optimization orchestrator.
 	:param _settings:
@@ -119,12 +119,12 @@ def optimize(_settings, _assets, _assets2, _milp_params, _measures, _measures2, 
 
 	solve_t = time()
 	logger.info(f'Solving MILP ...')
-	problem.solve_milp()
+	problem.solve_milp(a)
 	logger.info(f'Solving MILP ... OK! ({time() - solve_t:.3f}s)')
 
 	outputs_t = time()
 	logger.info(f'Generating outputs ...')
-	problem.generate_outputs()
+	problem.generate_outputs(a)
 	logger.info(f'Generating outputs ... OK! ({time() - outputs_t:.3f}s)')
 
 	return problem
@@ -142,6 +142,24 @@ if __name__ == '__main__':
 
 	# Obtenha o argumento passado na linha de comando
 	objective_function = sys.argv[1]
+	enom = float(sys.argv[2])
+	enom2 = float(sys.argv[3])
+	c_rate = float(sys.argv[4])
+	c_rate2 = float(sys.argv[5])
+	deg_curve1 = sys.argv[6]
+	deg_curve2 = sys.argv[7]
+	a = sys.argv[8]
+
+	if deg_curve1 == "1":
+		deg_curve1 = GeneralSettings.bess_deg_curve_lithium
+		bess_ch_eff = 90
+		bess_disch_eff = 90
+
+	if deg_curve2 == "2":
+		deg_curve2 = GeneralSettings.bess_deg_curve_Vanadium
+		bess_ch_eff2 = 65
+		bess_disch_eff2 = 65
+
 	print(objective_function)
 	parameters(objective_function)
 
@@ -222,17 +240,17 @@ if __name__ == '__main__':
 		original_test_data2 = deepcopy(GeneralSettings.bess_test_data2)
 
 		bess_asset = {
-			'actualENom': GeneralSettings.bess_e_nom - degraded,
-			'chEff': GeneralSettings.bess_ch_eff,
-			'degCurve': GeneralSettings.bess_deg_curve,
-			'dischEff': GeneralSettings.bess_disch_eff,
-			'eNom': GeneralSettings.bess_e_nom,
+			'actualENom': enom - degraded,
+			'chEff': bess_ch_eff,
+			'degCurve': deg_curve1,
+			'dischEff': bess_disch_eff,
+			'eNom': enom,
 			'eolCriterion': GeneralSettings.bess_eol_criterion,
 			'invMaxIDC': GeneralSettings.bess_inv_max_idc,
 			'invSNom': GeneralSettings.bess_inv_s_nom,
 			'invVNom': GeneralSettings.bess_inv_v_nom,
-			'maxCCh': GeneralSettings.bess_max_c_ch,
-			'maxCDch': GeneralSettings.bess_max_c_disch,
+			'maxCCh': c_rate,
+			'maxCDch': c_rate,
 			'maxSoc': GeneralSettings.bess_max_soc,
 			'minPCh': GeneralSettings.bess_min_p_ch,
 			'minPDch': GeneralSettings.bess_min_p_disch,
@@ -241,19 +259,20 @@ if __name__ == '__main__':
 			'testData': original_test_data,
 			'vNom': GeneralSettings.bess_v_nom,
 		}
+		print(bess_asset)
 
 		bess_asset2 = {
-			'actualENom': GeneralSettings.bess_e_nom2 - degraded2,
-			'chEff': GeneralSettings.bess_ch_eff2,
-			'degCurve': GeneralSettings.bess_deg_curve2,
-			'dischEff': GeneralSettings.bess_disch_eff2,
-			'eNom': GeneralSettings.bess_e_nom2,
+			'actualENom': enom2-degraded2,
+			'chEff': bess_ch_eff2,
+			'degCurve': deg_curve2,
+			'dischEff': bess_disch_eff2,
+			'eNom': enom2,
 			'eolCriterion': GeneralSettings.bess_eol_criterion2,
 			'invMaxIDC': GeneralSettings.bess_inv_max_idc2,
 			'invSNom': GeneralSettings.bess_inv_s_nom2,
 			'invVNom': GeneralSettings.bess_inv_v_nom2,
-			'maxCCh': GeneralSettings.bess_max_c_ch2,
-			'maxCDch': GeneralSettings.bess_max_c_disch2,
+			'maxCCh': c_rate2,
+			'maxCDch': c_rate2,
 			'maxSoc': GeneralSettings.bess_max_soc2,
 			'minPCh': GeneralSettings.bess_min_p_ch2,
 			'minPDch': GeneralSettings.bess_min_p_disch2,
@@ -263,6 +282,7 @@ if __name__ == '__main__':
 			'vNom': GeneralSettings.bess_v_nom2,
 		}
 
+		print(bess_asset2)
 
 
 		milp_params = {
@@ -291,7 +311,7 @@ if __name__ == '__main__':
 
 		# Run optimization
 		t0 = time()
-		prob_obj = optimize(settings, bess_asset, bess_asset2, milp_params, measures, measures2, forecasts_and_other_arrays)
+		prob_obj = optimize(settings, bess_asset, bess_asset2, milp_params, measures, measures2, forecasts_and_other_arrays, a)
 		t1 = time() - t0
 
 		# Get the needed outputs

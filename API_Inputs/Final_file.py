@@ -7,13 +7,22 @@ def final_file(Objective_function):
     df2 = pd.read_csv("output_data.csv", sep=";")
     df3 = pd.read_csv("forecast_data.csv", sep=";" )
 
-    # Converter a coluna 'date' para o tipo datetime
-    df1['date'] = pd.to_datetime(df1['date'])
+    # Obter a data de amanhã à meia-noite
+    start_date = pd.Timestamp.now().replace(hour=0, minute=0, second=0, microsecond=0) + pd.Timedelta(days=1)
 
-    # Adicionar uma hora à coluna de datas para começar na 00:00
-    start_date = pd.to_datetime(df1['date'].iloc[0]) + pd.DateOffset(hours=1)  # Adiciona uma hora ao primeiro timestamp
-    df1['date'] = pd.date_range(start=start_date, periods=len(df1), freq='H')  # Começa na meia-noite
+    # Obter a data de amanhã às 23h59m59s
+    end_date = start_date.replace(hour=23, minute=59, second=59)
+
+    # Criar a coluna de timestamps
+    timestamps = pd.date_range(start=start_date, end=end_date, freq='H')
+
+    df1['date'] = timestamps
+
+    # Exibir o DataFrame df1
     print(df1)
+
+    # Converter a coluna 'date' para o tipo datetime
+    #df1['date'] = pd.to_datetime(df1['date'])
 
     # Removendo "kW" da coluna
     df3['Load'] = df3['Load'].str.replace(' kW', '')

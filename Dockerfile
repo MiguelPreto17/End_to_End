@@ -8,6 +8,6 @@ COPY . /code
 
 RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
 
-CMD ["python", "main.py", "Cost", "Emissions"]
+CMD ["python", "main.py", "Cost", "Emissions", "140", "0", "100", "40", "0.785714", "0", "1", "0.25", "1", "2", "A"]
 
 
